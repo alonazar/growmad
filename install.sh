@@ -136,6 +136,11 @@ write_env() {
   if [ -f "$ENV_FILE" ]; then
     step "Keeping the existing settings in $ENV_FILE"
     NEW_PASSWORD=""
+    # Settings added by later versions: without NOMAD, keep their folders inside the install folder.
+    if [ ! -d "$NOMAD_STORAGE" ] && ! grep -q '^NOMADINBOX_PAGES_DIR=' "$ENV_FILE"; then
+      echo "NOMADINBOX_PAGES_DIR=$DIR/pages" >> "$ENV_FILE"
+      info "Added NOMADINBOX_PAGES_DIR (saved pages) to $ENV_FILE."
+    fi
     return
   fi
 
@@ -163,8 +168,13 @@ write_env() {
       if [ -n "${NOMADINBOX_VIDEO_DIR:-}" ]; then
         echo "NOMADINBOX_VIDEO_DIR=$NOMADINBOX_VIDEO_DIR"
       elif [ ! -d "$NOMAD_STORAGE" ]; then
-        echo "# Project NOMAD wasn't found, so saved videos stay inside the install folder."
+        echo "# Project NOMAD wasn't found, so saved videos and pages stay inside the install folder."
         echo "NOMADINBOX_VIDEO_DIR=$DIR/videos"
+      fi
+      if [ -n "${NOMADINBOX_PAGES_DIR:-}" ]; then
+        echo "NOMADINBOX_PAGES_DIR=$NOMADINBOX_PAGES_DIR"
+      elif [ ! -d "$NOMAD_STORAGE" ]; then
+        echo "NOMADINBOX_PAGES_DIR=$DIR/pages"
       fi
       # Only needed to run a second copy next to another one (e.g. for testing).
       [ -z "${NOMADINBOX_CONTAINER:-}" ] || echo "NOMADINBOX_CONTAINER=$NOMADINBOX_CONTAINER"

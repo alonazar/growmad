@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title | html.escape }}</title>
+  <link rel="stylesheet" href="{{ stylesheet_url }}">
+</head>
+<body>
+  {{~ ## Variables: page.title, page.site, page.host, page.url, page.byline, page.excerpt, page.saved_at, page.size,
+      page.category, page.tags (list), page.summary_html, page.content_html, page.link_count, page.saved_link_count,
+      links (list of: text, label, url, href, saved), home_url, stylesheet_url, in_app (true in the app, false in the
+      exported copy). Text values need "| html.escape"; the two *_html values are already safe HTML. ## ~}}
+  <article class="page">
+    <header class="page-header">
+      <p class="page-site">
+        {{ page.site | html.escape }}{{ if page.category }} · <span class="page-category">{{ page.category | html.escape }}</span>{{ end }}
+      </p>
+      <h1>{{ page.title | html.escape }}</h1>
+      <p class="page-meta">
+        {{ if page.byline }}{{ page.byline | html.escape }} · {{ end }}Saved {{ page.saved_at }} from
+        <a href="{{ page.url | html.escape }}">{{ page.host | html.escape }}</a>
+      </p>
+      {{ if page.tags.size > 0 }}
+      <p class="page-tags">{{ for tag in page.tags }}<span>#{{ tag | html.escape }}</span>{{ end }}</p>
+      {{ end }}
+    </header>
+
+    {{ if page.summary_html }}
+    <aside class="page-summary">
+      <h2>Summary</h2>
+      {{ page.summary_html }}
+    </aside>
+    {{ end }}
+
+    <div class="page-content">
+      {{ page.content_html }}
+    </div>
+
+    {{ if links.size > 0 }}
+    <footer class="page-links">
+      <h2>Links on this page <small>({{ page.saved_link_count }} of {{ page.link_count }} saved)</small></h2>
+      <ul>
+        {{ for link in links }}
+        <li class="{{ if link.saved }}saved{{ else }}not-saved{{ end }}">
+          <a href="{{ link.href | html.escape }}">{{ link.label | html.escape }}</a>
+          <span class="link-url">{{ link.url | html.escape }}</span>
+        </li>
+        {{ end }}
+      </ul>
+    </footer>
+    {{ end }}
+  </article>
+</body>
+</html>

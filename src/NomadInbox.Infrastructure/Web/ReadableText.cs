@@ -77,6 +77,9 @@ public sealed partial class ReadableText(TextExtractor textExtractor)
         return new ReadableContent(title, site ?? url.Host, Cap(text), note);
     }
 
+    /// <summary>The page's HTML as text, honouring the charset from the header or a &lt;meta&gt; tag.</summary>
+    public static string DecodeHtml(FetchedPage page) => Decode(page.Body, page.Charset);
+
     private static string Decode(byte[] body, string? headerCharset)
     {
         var charset = headerCharset;

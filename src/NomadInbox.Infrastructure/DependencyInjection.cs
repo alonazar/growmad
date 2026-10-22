@@ -9,6 +9,7 @@ using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Knowledge;
+using NomadInbox.Infrastructure.Pages;
 using NomadInbox.Infrastructure.Mail;
 using NomadInbox.Infrastructure.Settings;
 
@@ -18,7 +19,9 @@ public static class DependencyInjection
 {
     /// <param name="dataDirectory">Holds the SQLite database and Data Protection keys (a Docker volume in production).</param>
     /// <param name="videoDirectory">Where downloaded videos go (NOMAD's shared media folder in production); defaults to data/videos.</param>
-    public static IServiceCollection AddNomadInbox(this IServiceCollection services, string dataDirectory, string? videoDirectory = null)
+    /// <param name="pagesExportDirectory">Saved pages' media and plain-HTML copy (NOMAD's File Browser in production); defaults to data/pages-export.</param>
+    public static IServiceCollection AddNomadInbox(this IServiceCollection services, string dataDirectory,
+        string? videoDirectory = null, string? pagesExportDirectory = null)
     {
         Directory.CreateDirectory(dataDirectory);
 
@@ -69,6 +72,17 @@ public static class DependencyInjection
         services.AddSingleton<KnowledgeTrigger>();
         services.AddHostedService<KnowledgeSyncWorker>();
         services.AddSingleton<ItemDeletionService>();
+
+        // Saved pages: local copies of web pages (content, media, links), shown through an editable template.
+        services.AddSingleton(new PageStore(dataDirectory, pagesExportDirectory ?? Path.Combine(dataDirectory, "pages-export")));
+        services.AddSingleton(sp => new PageArchiver(
+            sp.GetRequiredService<PageFetcher>(), sp.GetRequiredService<PageStore>(), sp.GetRequiredService<TextExtractor>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PageArchiver>>(), sp.GetRequiredService<IPageRenderer>()));
+        services.AddSingleton<PageRenderer>();
+        services.AddSingleton<PageExporter>();
+        services.AddSingleton<PageTrigger>();
+        services.AddSingleton<PageService>();
+        services.AddHostedService<PageArchiveWorker>();
 
         services.AddSingleton<LinkProcessor>();
         services.AddSingleton<LinkTrigger>();

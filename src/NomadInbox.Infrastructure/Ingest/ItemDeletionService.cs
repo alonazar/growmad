@@ -18,7 +18,8 @@ public sealed class ItemDeletionService(
     IDbContextFactory<NomadInboxDbContext> dbFactory,
     AttachmentStore attachments,
     VideoDownloader videos,
-    ILogger<ItemDeletionService> logger)
+    ILogger<ItemDeletionService> logger,
+    Pages.PageService? pages = null)
 {
     public async Task<DeletionOutcome> DeleteAsync(int emailId, bool deleteFiles, CancellationToken ct)
     {
@@ -49,6 +50,19 @@ public sealed class ItemDeletionService(
             db.DeletedMessages.Add(new DeletedMessage { MessageId = email.MessageId });
         db.Emails.Remove(email); // links and attachments cascade
         await db.SaveChangesAsync(ct);
+
+        // Saved pages that came from this email: deleted along with its files, otherwise kept (without an email).
+        var pageIds = await db.Pages.Where(p => p.InboxEmailId == emailId).Select(p => p.Id).ToListAsync(ct);
+        if (deleteFiles && pages is not null)
+        {
+            foreach (var pageId in pageIds) await pages.DeleteAsync(pageId, ct);
+            filesDeleted += pageIds.Count;
+        }
+        else if (pageIds.Count > 0)
+        {
+            await db.Pages.Where(p => p.InboxEmailId == emailId)
+                .ExecuteUpdateAsync(u => u.SetProperty(p => p.InboxEmailId, (int?)null), ct);
+        }
 
         logger.LogInformation("Deleted item {Id} \"{Subject}\" ({Files} file(s) removed)", emailId, email.Subject, filesDeleted);
         return new DeletionOutcome(true, filesDeleted);

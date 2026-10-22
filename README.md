@@ -15,6 +15,7 @@ and NOMAD Inbox records it, indexes it by the subject line, files its attachment
 - **Phase 3:** web links are fetched, their readable text is extracted, and NOMAD's Ollama summarizes them.
 - **Phase 4:** YouTube videos are summarized from their transcripts, channels and playlists get a profile, and followed channels add their new videos automatically.
 - **Phase 5:** everything goes into the knowledge base of NOMAD's AI Assistant, so you can ask about it in NOMAD's chat; items can be deleted.
+- **Saved pages:** local copies of web pages (content with its formatting, images, videos and links), read in the **Library** through an editable template, and copied as plain HTML into NOMAD's File Browser.
 
 Hardening comes next (see [Roadmap](#roadmap)).
 
@@ -241,6 +242,19 @@ How it's filed and kept in step:
 - **Reconciliation.** The sync compares what *should* be in NOMAD with what NOMAD Inbox has sent: it uploads new documents, replaces changed ones (e.g. after **Summarize again**), and removes documents whose item was deleted. It runs after changes and every 2 minutes, sends at most 10 uploads per run, and shows NOMAD's embedding state (*Embedding…* → *Indexed · N chunks*) on each item's page.
 - **Controls.** **Resend** (per item) and **Resend everything** (Settings) send again. If NOMAD isn't reachable, it simply waits.
 - **Deleting.** **Delete…** on an item's page removes it with its links and attachments, and optionally its files: attachments and saved videos, unless another item uses them. Its documents are removed from NOMAD on the next sync, and its Message-ID is remembered, so a folder rescan or channel check won't bring it back.
+
+**6. Saved pages.** A web link can also get a local copy of the page. This happens for emails tagged `#archive` (**Settings → Saved pages** can switch it to *Always* or *Never*), and anytime through **Save page** on an email's link.
+
+- **Content.** The page's main content is extracted the way a browser's Reader View does it, or from a headless-browser render for JavaScript-built pages. Then it's cleaned with an allowlist: paragraphs, headings, **bold**/*italic* and other inline formatting, lists, quotes, code, tables and figures stay; scripts, iframes, forms, inline styles and classes go, so the look comes only from the local stylesheet.
+- **Media.** Images (including lazy-loaded ones and the largest `srcset` size) and linked video files are downloaded within the size limits in Settings. Each is stored once, by content hash, and the page points at the local copy. Anything that couldn't be saved becomes a link to the original.
+- **YouTube embeds** are added to the email as YouTube links. They get a transcript and summary, and are downloaded per the YouTube settings (`#download` or *Always*). Once downloaded, the saved page plays the video locally.
+- **Links.** Every link in the content is recorded, and how it's shown is decided when the page is viewed. A link to a page that's saved too opens the local copy; one that isn't leads to a *Not saved yet* page with **Save this page**. Saving a page later updates the links in older pages. YouTube links saved this way go to the email as videos.
+- **Viewing.** The **Library** (menu) lists saved pages, with search across title, site, address and text. A page opens full-width with a bar on top: Library, Email, Original, **Save linked pages** (same site, up to the limit in Settings), **Refresh**, **Delete**. Saved pages are served with a Content-Security-Policy that allows no scripts at all.
+- **Template.** **Settings → Saved pages → Edit the page template** opens an editor for the [Scriban](https://github.com/scriban/scriban/blob/master/doc/language.md) HTML template and the stylesheet, with a live preview using one of your saved pages, syntax checking, and **Reset to default**. The variables are listed in a comment at the top of the template. A change applies to every saved page.
+- **NOMAD's File Browser.** Saved pages are also written as plain HTML to `/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages`, which File Browser shows as `nomad-inbox-pages`:
+  - `index.html` lists the pages by category, and each page has its own folder, `pages/<id>-<title>/index.html`, sharing `assets/` and `style.css`.
+  - Links between saved pages are relative, so the folder also works when copied elsewhere and opened in a browser.
+  - The images and videos live only here, and the app serves them from here, so nothing is stored twice. `NOMADINBOX_PAGES_DIR` changes the folder.
 
 ### Setting up summaries
 

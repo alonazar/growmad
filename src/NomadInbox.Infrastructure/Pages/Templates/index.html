@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saved pages · NOMAD Inbox</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <article class="page">
+    <header class="page-header">
+      <p class="page-site">NOMAD Inbox</p>
+      <h1>Saved pages</h1>
+      <p class="page-meta">{{ total }} page(s), updated {{ updated_at }}. Open a page to read it offline.</p>
+    </header>
+    {{ for group in groups }}
+    <section class="index-group">
+      <h2>{{ group.name | html.escape }}</h2>
+      <ul>
+        {{ for p in group.pages }}
+        <li>
+          <a href="{{ p.href | html.escape }}">{{ p.title | html.escape }}</a>
+          <span class="link-url">{{ p.site | html.escape }} · saved {{ p.saved_at }}</span>
+        </li>
+        {{ end }}
+      </ul>
+    </section>
+    {{ end }}
+  </article>
+</body>
+</html>

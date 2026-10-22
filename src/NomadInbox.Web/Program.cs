@@ -11,6 +11,7 @@ using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Knowledge;
+using NomadInbox.Web;
 using NomadInbox.Web.Auth;
 using NomadInbox.Web.Components;
 
@@ -32,7 +33,10 @@ var dataDirectory = Path.GetFullPath(string.IsNullOrWhiteSpace(configuredDataDir
     ? Path.Combine(builder.Environment.ContentRootPath, "data")
     : configuredDataDirectory);
 var videoDirectory = builder.Configuration["NomadInbox:VideoDirectory"];
-builder.Services.AddNomadInbox(dataDirectory, string.IsNullOrWhiteSpace(videoDirectory) ? null : videoDirectory);
+var pagesDirectory = builder.Configuration["NomadInbox:PagesExportDirectory"];
+builder.Services.AddNomadInbox(dataDirectory,
+    string.IsNullOrWhiteSpace(videoDirectory) ? null : videoDirectory,
+    string.IsNullOrWhiteSpace(pagesDirectory) ? null : pagesDirectory);
 
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.Section));
 builder.Services.AddSingleton<AdminCredentialValidator>();
@@ -213,6 +217,8 @@ app.MapPost("/channels/{id:int}/{mode:regex(^(check|toggle|delete)$)}", async (i
     }
     return Results.LocalRedirect(message is null ? "~/channels" : $"~/channels?message={Uri.EscapeDataString(message)}");
 }).RequireAuthorization().DisableAntiforgery(); // validated explicitly above
+
+app.MapPageEndpoints();
 
 // Every page requires sign-in unless it opts out with [AllowAnonymous] (login, error, not found).
 app.MapRazorComponents<App>()

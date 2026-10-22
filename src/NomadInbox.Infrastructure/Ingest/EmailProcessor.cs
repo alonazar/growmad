@@ -22,7 +22,8 @@ public sealed class EmailProcessor(
     AttachmentStore store,
     TextExtractor textExtractor,
     ILogger<EmailProcessor> logger,
-    LinkTrigger? linkTrigger = null)
+    LinkTrigger? linkTrigger = null,
+    Pages.PageService? pages = null)
 {
     public const int BatchSize = 25;
     private const int MaxBodyChars = 100_000;
@@ -107,6 +108,13 @@ public sealed class EmailProcessor(
 
         email.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        // Saved pages: web links of #archive emails (or all, per Settings) get a local copy.
+        if (success && pages is not null)
+        {
+            try { await pages.QueueForEmailAsync(email, settings, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogWarning("Queueing pages failed: {Message}", ex.Message); }
+        }
 
         if (settings.ApplyLabels)
         {

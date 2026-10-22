@@ -1,0 +1,144 @@
+@page "/settings/page-template"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Text
+@using NomadInbox.Infrastructure.Pages
+@inject SettingsService SettingsService
+@inject PageRenderer Renderer
+@inject PageExporter Exporter
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+
+<PageTitle>Page template · NOMAD Inbox</PageTitle>
+
+<p class="mb-2"><a href="settings">&larr; Settings</a></p>
+<h1 class="h3 mb-2">Page template</h1>
+<p class="text-muted small">
+    Saved pages are shown through this <a href="https://github.com/scriban/scriban/blob/master/doc/language.md" target="_blank" rel="noopener">Scriban</a>
+    template and stylesheet. The comment at the top of the template lists the variables. Changes apply to every saved page,
+    in the app and in the exported copy. Scripts never run in saved pages.
+</p>
+
+@if (template is null)
+{
+    <p class="text-muted">Loading…</p>
+    return;
+}
+
+<div class="row g-3">
+    <div class="col-xl-6">
+        <label class="form-label fw-semibold" for="tpl">HTML template</label>
+        <textarea id="tpl" class="form-control font-monospace template-editor" rows="22" @bind="template" @bind:event="oninput" @bind:after="Changed"></textarea>
+        <label class="form-label fw-semibold mt-3" for="css">Stylesheet</label>
+        <textarea id="css" class="form-control font-monospace template-editor" rows="14" @bind="stylesheet" @bind:event="oninput" @bind:after="Changed"></textarea>
+
+        @if (errors.Count > 0)
+        {
+            <div class="alert alert-danger small mt-3 mb-0">
+                @foreach (var e in errors) { <div>@e</div> }
+            </div>
+        }
+
+        <div class="save-bar d-flex flex-wrap align-items-center gap-2 mt-3">
+            <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(saving || errors.Count > 0)">@(saving ? "Saving…" : "Save")</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="PreviewAsync">Refresh preview</button>
+            <button type="button" class="btn btn-outline-danger" @onclick="ResetAsync">Reset to default</button>
+            @if (dirty) { <span class="text-warning-emphasis fw-semibold small">Unsaved changes</span> }
+            else if (message is not null) { <span class="text-success small">@message</span> }
+        </div>
+    </div>
+
+    <div class="col-xl-6">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <label class="form-label fw-semibold mb-0" for="sample">Preview with</label>
+            <select id="sample" class="form-select form-select-sm w-auto" @bind="sampleId" @bind:after="PreviewAsync">
+                @foreach (var (id, title) in samples)
+                {
+                    <option value="@id">@title</option>
+                }
+            </select>
+        </div>
+        @if (samples.Count == 0)
+        {
+            <p class="text-muted">Save a page first to preview the template with it.</p>
+        }
+        else
+        {
+            @* No scripts can run in the preview (sandbox without allow-scripts). *@
+            <iframe class="template-preview" sandbox="allow-same-origin" srcdoc="@previewHtml" title="Preview"></iframe>
+        }
+    </div>
+</div>
+
+@code {
+    private string? template, stylesheet, previewHtml, message;
+    private List<string> errors = [];
+    private List<(int Id, string Title)> samples = [];
+    private int sampleId;
+    private bool dirty, saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await SettingsService.GetAsync();
+        template = string.IsNullOrWhiteSpace(settings.PageTemplate) ? PageRenderer.DefaultTemplate : settings.PageTemplate;
+        stylesheet = string.IsNullOrWhiteSpace(settings.PageStylesheet) ? PageRenderer.DefaultStylesheet : settings.PageStylesheet;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        samples = (await db.Pages.AsNoTracking().Where(p => p.Status == PageStatus.Done)
+                .OrderByDescending(p => p.ArchivedAt).Take(50).Select(p => new { p.Id, p.Title, p.Url }).ToListAsync())
+            .Select(p => (p.Id, p.Title ?? p.Url)).ToList();
+        sampleId = samples.FirstOrDefault().Id;
+        await PreviewAsync();
+    }
+
+    private async Task Changed()
+    {
+        dirty = true;
+        message = null;
+        errors = PageRenderer.Validate(template ?? "").ToList();
+        if (errors.Count == 0) await PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (sampleId == 0 || template is null) return;
+        try
+        {
+            // The draft stylesheet goes in as a data: URL, so the preview shows unsaved CSS too.
+            var css = "data:text/css;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(stylesheet ?? ""));
+            previewHtml = await Renderer.RenderAsync(sampleId, PageView.App, await SettingsService.GetAsync(), template: template, stylesheetUrl: css);
+            errors = [];
+        }
+        catch (PageTemplateException ex)
+        {
+            errors = ex.Errors.ToList();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        errors = PageRenderer.Validate(template ?? "").ToList();
+        if (errors.Count > 0) return;
+        saving = true;
+        try
+        {
+            var settings = await SettingsService.GetAsync();
+            settings.PageTemplate = template == PageRenderer.DefaultTemplate ? null : template;
+            settings.PageStylesheet = stylesheet == PageRenderer.DefaultStylesheet ? null : stylesheet;
+            await SettingsService.SaveAsync(settings, null);
+            await Exporter.ExportAllAsync(CancellationToken.None); // the File Browser copy follows the template too
+            dirty = false;
+            message = $"Saved at {DateTime.Now:HH:mm:ss}; saved pages and the exported copy use it now.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        template = PageRenderer.DefaultTemplate;
+        stylesheet = PageRenderer.DefaultStylesheet;
+        await Changed();
+        message = null;
+    }
+}
