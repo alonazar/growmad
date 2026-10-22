@@ -86,6 +86,19 @@
                                         }
                                         <LinkAction LinkId="link.Id" Mode="refetch" Label="Fetch again" />
                                     }
+                                    @if (link.Kind == LinkKind.Web)
+                                    {
+                                        @if (savedPages.TryGetValue(link.Url, out var saved))
+                                        {
+                                            <a class="badge @(saved.Status == PageStatus.Done ? "text-bg-success" : "text-bg-light border") text-decoration-none" href="pages/@saved.Id">
+                                                @(saved.Status switch { PageStatus.Done => "Open saved copy", PageStatus.Failed => "Saving failed", _ => "Saving page…" })
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <LinkAction LinkId="link.Id" Mode="archive" Label="Save page" />
+                                        }
+                                    }
                                     @if (link.Kind is LinkKind.YouTubeChannel or LinkKind.YouTubeVideo && link.AuthorId is { } channelId)
                                     {
                                         @if (followed.Contains(channelId))
@@ -339,7 +352,12 @@
             .SingleOrDefaultAsync(e => e.Id == Id);
         followed = (await db.FollowedChannels.Where(c => c.Enabled).Select(c => c.ChannelId).ToListAsync()).ToHashSet();
         knowledge = await db.KnowledgeDocuments.AsNoTracking().Where(d => d.InboxEmailId == Id).OrderBy(d => d.ItemKey).ToListAsync();
+        var urls = email?.Links.Select(l => l.Url).ToList() ?? [];
+        savedPages = (await db.Pages.AsNoTracking().Where(p => urls.Contains(p.Url)).Select(p => new { p.Url, p.Id, p.Status }).ToListAsync())
+            .ToDictionary(p => p.Url, p => (p.Id, p.Status));
     }
+
+    private Dictionary<string, (int Id, PageStatus Status)> savedPages = [];
 
     private List<KnowledgeDocument> knowledge = [];
 

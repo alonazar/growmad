@@ -16,6 +16,75 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("NomadInbox.Core.Domain.ArchivedPage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ArchivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Byline")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentPath")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Excerpt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FinalUrl")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("InboxEmailId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RequestedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SavedFromPageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SiteName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SourceLinkId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TextContent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InboxEmailId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Url")
+                        .IsUnique();
+
+                    b.ToTable("Pages");
+                });
+
             modelBuilder.Entity("NomadInbox.Core.Domain.DeletedMessage", b =>
                 {
                     b.Property<string>("MessageId")
@@ -384,6 +453,12 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<int>("MaxAttachmentMegabytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("MaxPageAssetMegabytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxPageMegabytes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("MaxVideoHeight")
                         .HasColumnType("INTEGER");
 
@@ -405,6 +480,17 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PageArchiveMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PageStylesheet")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PageTemplate")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("PollIntervalMinutes")
                         .HasColumnType("INTEGER");
 
@@ -419,6 +505,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("RenderJavaScriptPages")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SaveLinkedPagesLimit")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("SubjectPrefix")
@@ -524,6 +613,73 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.ToTable("Cursors");
                 });
 
+            modelBuilder.Entity("NomadInbox.Core.Domain.PageAsset", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ArchivedPageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginalUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchivedPageId");
+
+                    b.HasIndex("FileName");
+
+                    b.ToTable("PageAssets");
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.PageLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ArchivedPageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchivedPageId");
+
+                    b.HasIndex("Url");
+
+                    b.ToTable("PageLinks");
+                });
+
             modelBuilder.Entity("NomadInbox.Core.Domain.EmailAttachment", b =>
                 {
                     b.HasOne("NomadInbox.Core.Domain.InboxEmail", null)
@@ -540,6 +696,31 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                         .HasForeignKey("InboxEmailId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.PageAsset", b =>
+                {
+                    b.HasOne("NomadInbox.Core.Domain.ArchivedPage", null)
+                        .WithMany("Assets")
+                        .HasForeignKey("ArchivedPageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.PageLink", b =>
+                {
+                    b.HasOne("NomadInbox.Core.Domain.ArchivedPage", null)
+                        .WithMany("Links")
+                        .HasForeignKey("ArchivedPageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.ArchivedPage", b =>
+                {
+                    b.Navigation("Assets");
+
+                    b.Navigation("Links");
                 });
 
             modelBuilder.Entity("NomadInbox.Core.Domain.InboxEmail", b =>

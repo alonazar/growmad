@@ -23,10 +23,14 @@ public sealed class PageFetcher : IDisposable
     private readonly HttpClient _publicOnly = Create(allowPrivate: false);
     private readonly HttpClient _any = Create(allowPrivate: true);
 
-    public async Task<FetchedPage> FetchAsync(string url, bool allowPrivateNetwork, CancellationToken ct)
+    /// <param name="maxBytes">Size limit for this download (pages: <see cref="MaxBytes"/>; media can allow more).</param>
+    /// <param name="referrer">Page the request comes from; some sites refuse image requests without it.</param>
+    public async Task<FetchedPage> FetchAsync(string url, bool allowPrivateNetwork, CancellationToken ct,
+        long maxBytes = MaxBytes, string? referrer = null)
     {
         var client = allowPrivateNetwork ? _any : _publicOnly;
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (referrer is not null && Uri.TryCreate(referrer, UriKind.Absolute, out var referrerUri)) request.Headers.Referrer = referrerUri;
 
         HttpResponseMessage response;
         try
@@ -51,8 +55,8 @@ public sealed class PageFetcher : IDisposable
             if (!response.IsSuccessStatusCode)
                 throw new LinkFetchException($"The site answered {(int)response.StatusCode} {response.ReasonPhrase}.");
 
-            if (response.Content.Headers.ContentLength > MaxBytes)
-                throw new LinkFetchException($"The page is larger than {MaxBytes / 1024 / 1024} MB.");
+            if (response.Content.Headers.ContentLength > maxBytes)
+                throw new LinkFetchException($"Larger than {maxBytes / 1024 / 1024} MB.");
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var buffer = new MemoryStream();
@@ -61,8 +65,8 @@ public sealed class PageFetcher : IDisposable
             while ((read = await stream.ReadAsync(chunk, ct)) > 0)
             {
                 buffer.Write(chunk, 0, read);
-                if (buffer.Length > MaxBytes)
-                    throw new LinkFetchException($"The page is larger than {MaxBytes / 1024 / 1024} MB.");
+                if (buffer.Length > maxBytes)
+                    throw new LinkFetchException($"Larger than {maxBytes / 1024 / 1024} MB.");
             }
 
             var type = response.Content.Headers.ContentType;

@@ -200,6 +200,45 @@
 
             <section class="card mb-4">
                 <div class="card-body">
+                    <h2 class="h5">Saved pages</h2>
+                    <p class="text-muted small">
+                        A local copy of a web page's main content (text with its formatting, images and videos), with its links recorded.
+                        Read them in the <a href="library">Library</a>; a plain-HTML copy goes to NOMAD's File Browser folder.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="pgMode">Save web links</label>
+                            <InputSelect id="pgMode" class="form-select" @bind-Value="form.PageArchiveMode">
+                                <option value="@PageArchiveMode.Never">Never (only with Save page)</option>
+                                <option value="@PageArchiveMode.Tagged">Only for emails tagged #archive</option>
+                                <option value="@PageArchiveMode.Always">Always</option>
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="pgLinked">"Save linked pages" saves at most</label>
+                            <InputNumber id="pgLinked" class="form-control" @bind-Value="form.SaveLinkedPagesLimit" />
+                            <ValidationMessage For="() => form.SaveLinkedPagesLimit" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="pgMax">Max size per page, with media (MB)</label>
+                            <InputNumber id="pgMax" class="form-control" @bind-Value="form.MaxPageMegabytes" />
+                            <ValidationMessage For="() => form.MaxPageMegabytes" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="pgAsset">Max size per image or video (MB)</label>
+                            <InputNumber id="pgAsset" class="form-control" @bind-Value="form.MaxPageAssetMegabytes" />
+                            <ValidationMessage For="() => form.MaxPageAssetMegabytes" />
+                        </div>
+                    </div>
+                    <div class="form-text mt-2">
+                        YouTube videos embedded in a saved page are added to the email, so they follow the YouTube settings below.
+                    </div>
+                    <a class="btn btn-outline-secondary btn-sm mt-3" href="settings/page-template">Edit the page template</a>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
                     <h2 class="h5">YouTube</h2>
                     <div class="row g-3">
                         <div class="col-md-7">
@@ -536,6 +575,10 @@
         public bool KnowledgeIncludeFullText { get; set; }
         public bool KnowledgeCollectionPerCategory { get; set; }
         public string? KnowledgeDefaultCollection { get; set; }
+        public PageArchiveMode PageArchiveMode { get; set; }
+        [Range(1, 10000, ErrorMessage = "Choose between 1 and 10000 MB.")] public int MaxPageMegabytes { get; set; }
+        [Range(1, 10000, ErrorMessage = "Choose between 1 and 10000 MB.")] public int MaxPageAssetMegabytes { get; set; }
+        [Range(1, 500, ErrorMessage = "Choose between 1 and 500.")] public int SaveLinkedPagesLimit { get; set; }
         public bool SummariesEnabled { get; set; }
         public string? OllamaUrl { get; set; }
         public string? OllamaModel { get; set; }
@@ -549,6 +592,8 @@
             VideoDownloadMode = s.VideoDownloadMode, MaxVideoHeight = s.MaxVideoHeight, MaxVideoMegabytes = s.MaxVideoMegabytes,
             KnowledgeBaseEnabled = s.KnowledgeBaseEnabled, NomadUrl = s.NomadUrl, KnowledgeIncludeFullText = s.KnowledgeIncludeFullText,
             KnowledgeCollectionPerCategory = s.KnowledgeCollectionPerCategory, KnowledgeDefaultCollection = s.KnowledgeDefaultCollection,
+            PageArchiveMode = s.PageArchiveMode, MaxPageMegabytes = s.MaxPageMegabytes, MaxPageAssetMegabytes = s.MaxPageAssetMegabytes,
+            SaveLinkedPagesLimit = s.SaveLinkedPagesLimit,
             SummariesEnabled = s.SummariesEnabled,
             OllamaUrl = s.OllamaUrl, OllamaModel = s.OllamaModel, OllamaContextTokens = s.OllamaContextTokens,
             SummaryPrompt = s.SummaryPrompt,
@@ -587,6 +632,10 @@
             s.KnowledgeIncludeFullText = KnowledgeIncludeFullText;
             s.KnowledgeCollectionPerCategory = KnowledgeCollectionPerCategory;
             s.KnowledgeDefaultCollection = string.IsNullOrWhiteSpace(KnowledgeDefaultCollection) ? "nomad inbox" : KnowledgeDefaultCollection.Trim();
+            s.PageArchiveMode = PageArchiveMode;
+            s.MaxPageMegabytes = MaxPageMegabytes;
+            s.MaxPageAssetMegabytes = MaxPageAssetMegabytes;
+            s.SaveLinkedPagesLimit = SaveLinkedPagesLimit;
             s.SummariesEnabled = SummariesEnabled;
             s.OllamaUrl = string.IsNullOrWhiteSpace(OllamaUrl) ? "http://host.docker.internal:11434" : OllamaUrl.Trim().TrimEnd('/');
             s.OllamaModel = OllamaModel?.Trim() ?? "";

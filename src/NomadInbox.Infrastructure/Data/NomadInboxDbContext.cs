@@ -14,6 +14,9 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
     public DbSet<FollowedChannel> FollowedChannels => Set<FollowedChannel>();
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
     public DbSet<DeletedMessage> DeletedMessages => Set<DeletedMessage>();
+    public DbSet<ArchivedPage> Pages => Set<ArchivedPage>();
+    public DbSet<PageAsset> PageAssets => Set<PageAsset>();
+    public DbSet<PageLink> PageLinks => Set<PageLink>();
     public DbSet<InboxSettings> Settings => Set<InboxSettings>();
     public DbSet<MailboxCursor> Cursors => Set<MailboxCursor>();
 
@@ -66,6 +69,22 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
 
         model.Entity<DeletedMessage>(e => e.HasKey(x => x.MessageId));
 
+        model.Entity<ArchivedPage>(e =>
+        {
+            e.HasIndex(x => x.Url).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.InboxEmailId);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasMany(x => x.Assets).WithOne().HasForeignKey(a => a.ArchivedPageId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Links).WithOne().HasForeignKey(l => l.ArchivedPageId).OnDelete(DeleteBehavior.Cascade);
+        });
+        model.Entity<PageAsset>(e =>
+        {
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => x.FileName);
+        });
+        model.Entity<PageLink>(e => e.HasIndex(x => x.Url));
+
         model.Entity<InboxSettings>(e =>
         {
             e.Property(x => x.Id).ValueGeneratedNever();
@@ -74,6 +93,7 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
             e.Ignore(x => x.IsAiConfigured);
             e.Ignore(x => x.TranscriptLanguageList);
             e.Property(x => x.VideoDownloadMode).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.PageArchiveMode).HasConversion<string>().HasMaxLength(20);
         });
 
         model.Entity<MailboxCursor>(e => e.HasKey(x => x.Folder));

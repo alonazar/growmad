@@ -1,0 +1,114 @@
+@page "/library"
+@rendermode InteractiveServer
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+
+<PageTitle>Library · NOMAD Inbox</PageTitle>
+
+<div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+    <h1 class="h3 mb-0">Library</h1>
+    <span class="text-muted small">Saved pages: content, images and videos, readable offline.</span>
+</div>
+<p class="text-muted small mb-4">
+    Web links in emails tagged <code>#archive</code> are saved automatically (see Settings → Saved pages). Saved pages are
+    also copied as plain HTML into NOMAD's File Browser folder.
+</p>
+
+@if (Message is not null)
+{
+    <div class="alert alert-info py-2">@Message</div>
+}
+
+<div class="row g-2 mb-3">
+    <div class="col-sm-8">
+        <input class="form-control" type="search" placeholder="Search title, site, address or text"
+               @bind="Q" @bind:event="oninput" @bind:after="LoadAsync" />
+    </div>
+    <div class="col-sm-4">
+        <select class="form-select" @bind="Status" @bind:after="LoadAsync">
+            <option value="">All</option>
+            @foreach (var s in Enum.GetValues<PageStatus>())
+            {
+                <option value="@s">@s</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (pages.Count == 0)
+{
+    <p class="text-muted">@(string.IsNullOrEmpty(Q) && string.IsNullOrEmpty(Status) ? "No saved pages yet." : "Nothing matches.")</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr><th>Page</th><th>Saved</th><th class="text-end">Size</th><th class="text-center" title="Links on the page that are saved too">Links saved</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in pages)
+                {
+                    <tr>
+                        <td>
+                            <a href="pages/@p.Id" class="fw-semibold">@(p.Title ?? p.Url)</a>
+                            <div class="small text-muted text-break">
+                                @(p.SiteName ?? p.Url)
+                                @if (p.InboxEmailId is { } emailId) { <text> · </text><a href="emails/@emailId">email</a> }
+                            </div>
+                            @if (p.Error is not null) { <div class="small text-warning-emphasis">@p.Error</div> }
+                        </td>
+                        <td class="text-nowrap small" title="@Display.Local(p.ArchivedAt ?? p.RequestedAt)">@Display.Ago(p.ArchivedAt ?? p.RequestedAt)</td>
+                        <td class="text-end text-nowrap small">@(p.Status == PageStatus.Done ? Display.Size(p.Bytes) : "")</td>
+                        <td class="text-center small">@(p.Status == PageStatus.Done ? $"{savedLinks.GetValueOrDefault(p.Id)} / {p.Links.Count}" : "")</td>
+                        <td><span class="badge @Badge(p.Status)">@p.Status</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted">@pages.Count page(s)@(total > pages.Count ? $" of {total}" : "").</p>
+}
+
+@code {
+    private const int PageSize = 200;
+
+    [SupplyParameterFromQuery] private string? Q { get; set; }
+    [SupplyParameterFromQuery] private string? Status { get; set; }
+    [SupplyParameterFromQuery] private string? Message { get; set; }
+
+    private List<ArchivedPage> pages = [];
+    private Dictionary<int, int> savedLinks = [];
+    private int total;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.Pages.AsNoTracking();
+        if (Enum.TryParse<PageStatus>(Status, out var status)) query = query.Where(p => p.Status == status);
+        if (Q?.Trim() is { Length: > 0 } term)
+        {
+            var like = $"%{term}%";
+            query = query.Where(p => EF.Functions.Like(p.Url, like)
+                                     || (p.Title != null && EF.Functions.Like(p.Title, like))
+                                     || (p.SiteName != null && EF.Functions.Like(p.SiteName, like))
+                                     || (p.TextContent != null && EF.Functions.Like(p.TextContent, like)));
+        }
+
+        total = await query.CountAsync();
+        pages = await query.Include(p => p.Links).OrderByDescending(p => p.RequestedAt).Take(PageSize).ToListAsync();
+
+        var targets = pages.SelectMany(p => p.Links).Select(l => l.Url).Distinct().ToList();
+        var saved = (await db.Pages.Where(p => targets.Contains(p.Url) && p.Status == PageStatus.Done).Select(p => p.Url).ToListAsync()).ToHashSet();
+        savedLinks = pages.ToDictionary(p => p.Id, p => p.Links.Count(l => saved.Contains(l.Url)));
+    }
+
+    private static string Badge(PageStatus status) => status switch
+    {
+        PageStatus.Done => "text-bg-success",
+        PageStatus.Failed => "text-bg-danger",
+        PageStatus.Saving => "text-bg-info",
+        _ => "text-bg-light border",
+    };
+}

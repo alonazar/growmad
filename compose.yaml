@@ -1,13 +1,14 @@
 services:
-  # One-off, runs as root before the app: makes the shared videos folder writable for the app's non-root user.
-  # (Everything under /opt/project-nomad is owned by root; Jellyfin and File Browser run as root and can read it.)
+  # One-off, runs as root before the app: makes the shared videos and pages folders writable for the app's non-root
+  # user. (Everything under /opt/project-nomad is owned by root; Jellyfin and File Browser run as root and can read it.)
   nomad-inbox-init:
     build: . # same image as the app (built once, then cached), so compose never tries to pull it
     image: ${NOMADINBOX_IMAGE:-nomad-inbox:latest}
     user: root
-    entrypoint: ["sh", "-c", "mkdir -p /videos && chown \"$$APP_UID\" /videos"]
+    entrypoint: ["sh", "-c", "mkdir -p /videos /pages-export && chown \"$$APP_UID\" /videos /pages-export"]
     volumes:
       - ${NOMADINBOX_VIDEO_DIR:-/opt/project-nomad/storage/media/youtube}:/videos
+      - ${NOMADINBOX_PAGES_DIR:-/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages}:/pages-export
     restart: "no"
 
   nomad-inbox:
@@ -29,6 +30,8 @@ services:
       - nomad-inbox-data:/data
       # Saved YouTube videos, in NOMAD's shared media folder so Jellyfin (/media/youtube) and File Browser can see them.
       - ${NOMADINBOX_VIDEO_DIR:-/opt/project-nomad/storage/media/youtube}:/videos
+      # Saved pages: their images and videos, plus a plain-HTML copy, in NOMAD's File Browser ("nomad-inbox-pages").
+      - ${NOMADINBOX_PAGES_DIR:-/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages}:/pages-export
     extra_hosts:
       # Lets later phases reach NOMAD's Ollama (port 11434) and Command Center (port 8080) on the host.
       - "host.docker.internal:host-gateway"

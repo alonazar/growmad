@@ -79,6 +79,20 @@ public class InboxSettings
     /// <summary>Collection for uncategorized items, or for everything when per-category is off.</summary>
     public string KnowledgeDefaultCollection { get; set; } = "nomad inbox";
 
+    // Saved pages (page archive).
+    /// <summary>Which web links get a local copy: emails tagged #archive (default), all, or none.</summary>
+    public PageArchiveMode PageArchiveMode { get; set; } = PageArchiveMode.Tagged;
+    /// <summary>A page's content plus media stops downloading media beyond this.</summary>
+    public int MaxPageMegabytes { get; set; } = 100;
+    /// <summary>Single images/videos bigger than this are left out.</summary>
+    public int MaxPageAssetMegabytes { get; set; } = 25;
+    /// <summary>"Save all linked pages" queues at most this many.</summary>
+    public int SaveLinkedPagesLimit { get; set; } = 25;
+    /// <summary>Custom Scriban page template; empty uses the built-in one.</summary>
+    public string? PageTemplate { get; set; }
+    /// <summary>Custom page stylesheet; empty uses the built-in one.</summary>
+    public string? PageStylesheet { get; set; }
+
     public bool IsAiConfigured =>
         SummariesEnabled && !string.IsNullOrWhiteSpace(OllamaUrl) && !string.IsNullOrWhiteSpace(OllamaModel);
 
@@ -103,6 +117,14 @@ public class InboxSettings
             ? normalized.EndsWith(entry, StringComparison.Ordinal)
             : normalized == entry);
     }
+}
+
+public enum PageArchiveMode
+{
+    Never,
+    /// <summary>Only web links in emails tagged #archive.</summary>
+    Tagged,
+    Always,
 }
 
 public enum VideoDownloadMode

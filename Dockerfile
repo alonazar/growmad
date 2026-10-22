@@ -19,8 +19,8 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /data /videos \
-    && chown "$APP_UID" /data /videos
+    && mkdir -p /data /videos /pages-export \
+    && chown "$APP_UID" /data /videos /pages-export
 
 COPY --from=build /app/publish .
 
@@ -40,7 +40,8 @@ RUN chown -R "$APP_UID" /opt/yt-dlp
 
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     NomadInbox__DataDirectory=/data \
-    NomadInbox__VideoDirectory=/videos
+    NomadInbox__VideoDirectory=/videos \
+    NomadInbox__PagesExportDirectory=/pages-export
 
 USER $APP_UID
 # Fail the build if the app user can't actually start the browser, yt-dlp or ffmpeg.
