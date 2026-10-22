@@ -117,7 +117,7 @@ In NOMAD's Command Center, open the **Supply Depot**, click **Add a custom app**
 
 | Field | Value |
 |---|---|
-| Docker Image | `ghcr.io/alonazar/nomad-inbox:1.0.0` (the [latest version](https://github.com/alonazar/growmad/pkgs/container/nomad-inbox); a pinned version lets NOMAD offer updates) |
+| Docker Image | `ghcr.io/alonazar/nomad-inbox:latest` (NOMAD warns that `:latest` is a moving tag; tick **install anyway**, see [Updating](#updating)) |
 | Display Name | `NOMAD Inbox` |
 | Port | container `8080` → a free host port, e.g. `8601` |
 | Volumes | `/opt/project-nomad/storage/nomad-inbox` → `/data` (database and keys: back this up) |
@@ -128,7 +128,15 @@ In NOMAD's Command Center, open the **Supply Depot**, click **Add a custom app**
 
 NOMAD downloads the image and starts it; the container creates its folders itself. Then click **Open** and continue with [Gmail setup](#gmail-setup). The AI and knowledge base addresses already point at NOMAD (`nomad_ollama`, `nomad_admin`).
 
-To change the password or time zone later, use **Manage › Edit**. To update, use **Update**, or turn on automatic updates for the app.
+To change the password or time zone later, use **Manage › Edit**.
+
+### Updating
+
+Use **Manage › Update (pull latest)** on the app's card. NOMAD downloads the image's tag again and restarts the app with your data; if the new version doesn't start, it goes back to the one that was running. Database migrations run on start.
+
+That's why the image is `:latest`: every release publishes `latest` (see [Releasing a version](#releasing-a-version)), and for custom apps NOMAD's Update only re-downloads the tag the app is set to. With a pinned tag such as `:1.0.4`, Update just fetches 1.0.4 again; to move to another version you'd change the tag in **Manage › Edit**. The **Update available** pill, the version choice and automatic updates are for NOMAD's own catalog apps only, so they don't appear for NOMAD Inbox, and its card shows `latest` instead of a version number.
+
+To go back to an older version, set the image to that version's tag in **Manage › Edit**, e.g. `ghcr.io/alonazar/nomad-inbox:1.0.2` ([all versions](https://github.com/alonazar/growmad/pkgs/container/nomad-inbox)). The database isn't migrated back, so only do this between versions with the same database.
 
 ### Move an install made with install.sh
 
@@ -144,7 +152,7 @@ Your emails, settings and the stored Gmail app password move along; saved videos
    docker volume ls | grep nomad-inbox   # usually nomad-inbox_nomad-inbox-data
    sudo mkdir -p /opt/project-nomad/storage/nomad-inbox
    docker run --rm --entrypoint cp -v nomad-inbox_nomad-inbox-data:/from:ro \
-     -v /opt/project-nomad/storage/nomad-inbox:/to ghcr.io/alonazar/nomad-inbox:1.0.0 -a /from/. /to/
+     -v /opt/project-nomad/storage/nomad-inbox:/to ghcr.io/alonazar/nomad-inbox:latest -a /from/. /to/
    ```
 3. Add the custom app as above, with the same password and time zone. Open it and check your emails, Settings (**Test connection**) and Library.
 4. When all is well, remove the old containers. Without `-v` the old volume stays as a backup; delete it later with `docker volume rm nomad-inbox_nomad-inbox-data`.
@@ -222,10 +230,12 @@ Migrations are applied automatically at startup.
 Pull requests build the Docker image and smoke-test it ([workflow](.github/workflows/image.yml)). Tagging `main` publishes it for the Supply Depot:
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+git tag v1.0.5 && git push origin v1.0.5
 ```
 
-That publishes `ghcr.io/alonazar/nomad-inbox:1.0.0` and `:latest`. NOMAD offers updates by these version tags, and its automatic updates only apply minor and patch versions. The first time, make the package public: on GitHub, **Packages › nomad-inbox › Package settings › Change visibility**.
+That publishes `ghcr.io/alonazar/nomad-inbox:1.0.5` and moves `:latest` to it, so **Update (pull latest)** in NOMAD installs it (see [Updating](#updating)). Use the next unused `vX.Y.Z`: NOMAD and the workflow only recognize tags of that form.
+
+The package is public and the repository's workflow can write to it. Should it ever be recreated: make it public (**Packages › nomad-inbox › Package settings › Change visibility**) and give the repository write access there (**Manage Actions access**), or the publish step fails with `permission_denied: write_package`.
 
 ## How it works
 
