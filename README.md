@@ -26,7 +26,7 @@ Hardening comes next (see [Roadmap](#roadmap)).
 - EF Core + SQLite; the IMAP app password is encrypted with ASP.NET Data Protection
 - PdfPig and Open XML SDK for text extraction from attachments
 - SmartReader (a port of Firefox's Reader View) for article text, Markdig for rendering summaries, Ollama's HTTP API for the summaries
-- Docker Compose, running next to NOMAD on the same Ubuntu/WSL host
+- Docker: a NOMAD Supply Depot custom app (image on GHCR), or Docker Compose next to NOMAD on the same Ubuntu/WSL host
 
 ```
 src/NomadInbox.Core            domain model, subject parser, link extractor, HTML-to-text, mailbox interfaces
@@ -72,7 +72,7 @@ If that page says *"The setting you're looking for is not available"*, either 2-
 
 ### 4. Enter it in NOMAD Inbox
 
-Open `http://localhost:8150/settings` and sign in as `admin`. To see the admin password, run this in Ubuntu:
+Open NOMAD Inbox's **Settings** and sign in as `admin`: from the Supply Depot, click **Open**; with install.sh, open `http://localhost:8150/settings`. The password is the `Auth__Password` you gave the Supply Depot, or for install.sh, run this in Ubuntu:
 
 ```bash
 grep PASSWORD ~/nomad-inbox/.env
@@ -109,9 +109,54 @@ Put a link or two in the body and attach a file. Then click **Check mail now** o
 
 If it shows as **Ignored**, the sender address isn't on your allowlist exactly as Gmail reports it.
 
-## Run on the NOMAD host (Ubuntu / WSL2)
+## Install from NOMAD's Supply Depot (recommended)
 
-Requires Docker, which the NOMAD installer already set up. One command installs NOMAD Inbox, and the same command updates it later.
+NOMAD can run NOMAD Inbox as a custom app, next to its own apps: it gets an **Open** button, and **Manage** gives you Edit, Logs, Stats, Update and Remove. App settings (Gmail, AI, Appearance, …) stay on NOMAD Inbox's own Settings page.
+
+In NOMAD's Command Center, open the **Supply Depot**, click **Add a custom app**, and fill in:
+
+| Field | Value |
+|---|---|
+| Docker Image | `ghcr.io/alonazar/nomad-inbox:1.0.0` (the [latest version](https://github.com/alonazar/growmad/pkgs/container/nomad-inbox); a pinned version lets NOMAD offer updates) |
+| Display Name | `NOMAD Inbox` |
+| Port | container `8080` → a free host port, e.g. `8601` |
+| Volumes | `/opt/project-nomad/storage/nomad-inbox` → `/data` (database and keys: back this up) |
+| | `/opt/project-nomad/storage/media/youtube` → `/videos` (saved videos, seen by Jellyfin and File Browser) |
+| | `/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages` → `/pages-export` (saved pages, seen in File Browser) |
+| Environment | `Auth__Password=<a password for the web UI>` (sign in as `admin`) and `TZ=<your time zone>`, e.g. `TZ=America/New_York` |
+| Memory / CPUs | `2048` MB and `2` (the page renderer and video downloads need more than the 1 GB default) |
+
+NOMAD downloads the image and starts it; the container creates its folders itself. Then click **Open** and continue with [Gmail setup](#gmail-setup). The AI and knowledge base addresses already point at NOMAD (`nomad_ollama`, `nomad_admin`).
+
+To change the password or time zone later, use **Manage › Edit**. To update, use **Update**, or turn on automatic updates for the app.
+
+### Move an install made with install.sh
+
+Your emails, settings and the stored Gmail app password move along; saved videos and pages are already in NOMAD's folders. In Ubuntu:
+
+1. Note your admin password and time zone, then stop the old app. **Never run both at once**: both would check Gmail and process the same mail.
+   ```bash
+   grep -E '^(NOMADINBOX_ADMIN_PASSWORD|TZ)=' ~/nomad-inbox/.env
+   cd ~/nomad-inbox && docker compose stop
+   ```
+2. Copy the data volume (database, `keys/`, `files/`, `pages/`) into NOMAD's storage, using the NOMAD Inbox image itself:
+   ```bash
+   docker volume ls | grep nomad-inbox   # usually nomad-inbox_nomad-inbox-data
+   sudo mkdir -p /opt/project-nomad/storage/nomad-inbox
+   docker run --rm --entrypoint cp -v nomad-inbox_nomad-inbox-data:/from:ro \
+     -v /opt/project-nomad/storage/nomad-inbox:/to ghcr.io/alonazar/nomad-inbox:1.0.0 -a /from/. /to/
+   ```
+3. Add the custom app as above, with the same password and time zone. Open it and check your emails, Settings (**Test connection**) and Library.
+4. When all is well, remove the old containers. Without `-v` the old volume stays as a backup; delete it later with `docker volume rm nomad-inbox_nomad-inbox-data`.
+   ```bash
+   cd ~/nomad-inbox && docker compose down
+   ```
+
+To go back before step 4: remove the custom app in the Supply Depot, then `cd ~/nomad-inbox && docker compose up -d`.
+
+## Run on the NOMAD host with install.sh (Ubuntu / WSL2)
+
+Without NOMAD's Supply Depot, or to run a branch. Requires Docker, which the NOMAD installer already set up. One command installs NOMAD Inbox, and the same command updates it later.
 
 Run, as your normal user (not root):
 
@@ -171,6 +216,16 @@ dotnet ef migrations add <Name> -p src/NomadInbox.Infrastructure -s src/NomadInb
 ```
 
 Migrations are applied automatically at startup.
+
+### Releasing a version
+
+Pull requests build the Docker image and smoke-test it ([workflow](.github/workflows/image.yml)). Tagging `main` publishes it for the Supply Depot:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+That publishes `ghcr.io/alonazar/nomad-inbox:1.0.0` and `:latest`. NOMAD offers updates by these version tags, and its automatic updates only apply minor and patch versions. The first time, make the package public: on GitHub, **Packages › nomad-inbox › Package settings › Change visibility**.
 
 ## How it works
 
@@ -261,7 +316,7 @@ How it's filed and kept in step:
 1. In NOMAD's Command Center, install the **AI Assistant** (it runs Ollama in the `nomad_ollama` container on port 11434).
 2. In the AI Assistant's settings, download a model. On a 16 GB GPU, `gemma3:12b` is a good balance of quality and room for long pages. Smaller GPUs can use `gemma3:4b` or `qwen3:8b`.
 3. In NOMAD Inbox → **Settings → AI summaries**:
-   - leave the address as `http://host.docker.internal:11434`
+   - leave the address as `http://nomad_ollama:11434`
    - click **Load models** and choose the model
    - click **Test the model**, then **Save settings**
 

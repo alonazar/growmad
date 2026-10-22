@@ -46,6 +46,12 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
 USER $APP_UID
 # Fail the build if the app user can't actually start the browser, yt-dlp or ffmpeg.
 RUN dotnet NomadInbox.Web.dll check-browser && /opt/yt-dlp/yt-dlp --version && ffmpeg -hide_banner -version | head -1
+
+# Starts as root only to give the mounted folders to the app user, then runs the app as that user
+# (see docker-entrypoint.sh). This replaces a separate setup container, which NOMAD's Supply Depot can't run.
+USER root
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/nomad-inbox-entrypoint
 VOLUME /data
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "NomadInbox.Web.dll"]
+ENTRYPOINT ["nomad-inbox-entrypoint"]
+CMD ["dotnet", "NomadInbox.Web.dll"]
