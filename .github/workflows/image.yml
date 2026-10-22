@@ -15,12 +15,16 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright installs the browser's system libraries only on Linux versions it knows.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # The page-rendering tests drive headless Chromium; the app's own command installs it (as the Docker build does).
+      - name: Install headless browser
+        run: dotnet run --project src/NomadInbox.Web -- install-browser
       - run: dotnet test tests/NomadInbox.Tests
 
   image:
