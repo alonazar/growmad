@@ -130,6 +130,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("StoredAsZip")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("StoredPath")
                         .HasColumnType("TEXT");
 
@@ -408,6 +411,11 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 
                     b.Property<bool>("AllowPrivateNetworkLinks")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("AllowedAttachmentKinds")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("AllowedSenders")
                         .IsRequired()

@@ -1,5 +1,7 @@
+using System.IO.Compression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using NomadInbox.Core.Content;
 using NomadInbox.Core.Domain;
 using NomadInbox.Core.Mail;
 using NomadInbox.Infrastructure.Files;
@@ -152,6 +154,96 @@ public sealed class EmailProcessorTests : IAsyncLifetime
         db.Emails.Add(email);
         await db.SaveChangesAsync();
         return email.Id;
+    }
+
+    [Fact]
+    public async Task Programs_are_listed_but_not_stored_by_default()
+    {
+        var id = await AddEmailAsync("m1@x");
+        _reader.Session.Messages["m1@x"] = new FetchedMessage(1, "", null,
+        [
+            new FetchedAttachment("setup.exe", "application/octet-stream", AttachmentClassifierTests.WindowsProgram()),
+            new FetchedAttachment("photo.jpg", "image/jpeg", "jpeg bytes"u8.ToArray()),
+        ]);
+
+        await _processor.ProcessPendingAsync(default);
+
+        var email = await LoadAsync(id);
+        var program = email.Attachments.Single(a => a.FileName == "setup.exe");
+        Assert.Null(program.StoredPath);
+        Assert.Contains("programs and scripts aren't allowed", program.Note);
+        Assert.NotNull(email.Attachments.Single(a => a.FileName == "photo.jpg").StoredPath);
+    }
+
+    [Fact]
+    public async Task Allowed_programs_are_stored_inside_a_zip()
+    {
+        await AllowAsync(InboxSettings.DefaultAttachmentKinds | AttachmentKinds.Executables);
+        var id = await AddEmailAsync("m1@x", category: "Tools");
+        var program = AttachmentClassifierTests.WindowsProgram();
+        _reader.Session.Messages["m1@x"] = new FetchedMessage(1, "", null, [new FetchedAttachment("setup.exe", "application/octet-stream", program)]);
+
+        await _processor.ProcessPendingAsync(default);
+
+        var file = (await LoadAsync(id)).Attachments.Single();
+        Assert.True(file.StoredAsZip);
+        Assert.Equal("setup.exe", file.FileName);
+        Assert.StartsWith("Tools/", file.StoredPath);
+        Assert.EndsWith("/setup.exe.zip", file.StoredPath);
+        Assert.Equal(AttachmentStore.ComputeSha256(program), file.Sha256);
+        Assert.Null(file.ExtractedText);
+
+        using var zip = ZipFile.OpenRead(_store.ResolveFullPath(file.StoredPath!)!);
+        var entry = Assert.Single(zip.Entries);
+        Assert.Equal("setup.exe", entry.FullName);
+        using var content = new MemoryStream();
+        entry.Open().CopyTo(content);
+        Assert.Equal(program, content.ToArray());
+    }
+
+    [Fact]
+    public async Task Same_program_in_another_email_reuses_the_zip()
+    {
+        await AllowAsync(InboxSettings.DefaultAttachmentKinds | AttachmentKinds.Executables);
+        await AddEmailAsync("m1@x");
+        var second = await AddEmailAsync("m2@x");
+        var file = new FetchedAttachment("setup.exe", "application/octet-stream", AttachmentClassifierTests.WindowsProgram());
+        _reader.Session.Messages["m1@x"] = new FetchedMessage(1, "", null, [file]);
+        _reader.Session.Messages["m2@x"] = new FetchedMessage(2, "", null, [file with { FileName = "copy.exe" }]);
+
+        await _processor.ProcessPendingAsync(default);
+
+        var copy = (await LoadAsync(second)).Attachments.Single();
+        Assert.True(copy.IsDuplicate);
+        Assert.True(copy.StoredAsZip);
+        Assert.EndsWith("setup.exe.zip", copy.StoredPath);
+    }
+
+    [Fact]
+    public async Task Kinds_that_are_turned_off_are_not_stored()
+    {
+        await AllowAsync(InboxSettings.DefaultAttachmentKinds & ~AttachmentKinds.Video);
+        var id = await AddEmailAsync("m1@x");
+        _reader.Session.Messages["m1@x"] = new FetchedMessage(1, "", null,
+        [
+            new FetchedAttachment("clip.mp4", "video/mp4", "video"u8.ToArray()),
+            new FetchedAttachment("notes.txt", "text/plain", "text"u8.ToArray()),
+        ]);
+
+        await _processor.ProcessPendingAsync(default);
+
+        var email = await LoadAsync(id);
+        var clip = email.Attachments.Single(a => a.FileName == "clip.mp4");
+        Assert.Null(clip.StoredPath);
+        Assert.Contains("videos aren't allowed", clip.Note);
+        Assert.NotNull(email.Attachments.Single(a => a.FileName == "notes.txt").StoredPath);
+    }
+
+    private async Task AllowAsync(AttachmentKinds kinds)
+    {
+        var settings = await _db.Settings.GetAsync();
+        settings.AllowedAttachmentKinds = kinds;
+        await _db.Settings.SaveAsync(settings, null);
     }
 
     private async Task<InboxEmail> LoadAsync(int id)

@@ -213,6 +213,7 @@
                             }
                             <span class="text-muted small">@Display.Size(file.SizeBytes) · @file.ContentType</span>
                             @if (file.IsDuplicate) { <span class="badge text-bg-light border">already filed</span> }
+                            @if (file.StoredAsZip) { <span class="badge text-bg-light border" title="Programs and scripts are saved inside a zip">zipped</span> }
                         </div>
                         @if (file.StoredPath is not null)
                         {

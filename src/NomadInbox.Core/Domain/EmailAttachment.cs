@@ -16,6 +16,8 @@ public class EmailAttachment
     public string? StoredPath { get; set; }
     /// <summary>True when an identical file was already stored and this record points at it.</summary>
     public bool IsDuplicate { get; set; }
+    /// <summary>True when the stored file is a zip holding the original (programs and scripts), so it can't run by accident.</summary>
+    public bool StoredAsZip { get; set; }
 
     /// <summary>Plain text extracted for search and summaries; null when the type is unsupported.</summary>
     public string? ExtractedText { get; set; }
