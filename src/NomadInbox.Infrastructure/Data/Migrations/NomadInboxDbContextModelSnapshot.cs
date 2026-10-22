@@ -16,6 +16,19 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("NomadInbox.Core.Domain.DeletedMessage", b =>
+                {
+                    b.Property<string>("MessageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DeletedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MessageId");
+
+                    b.ToTable("DeletedMessages");
+                });
+
             modelBuilder.Entity("NomadInbox.Core.Domain.EmailAttachment", b =>
                 {
                     b.Property<int>("Id")
@@ -355,6 +368,19 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<long?>("ImportSince")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("KnowledgeBaseEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("KnowledgeCollectionPerCategory")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("KnowledgeDefaultCollection")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("KnowledgeIncludeFullText")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("MaxAttachmentMegabytes")
                         .HasColumnType("INTEGER");
 
@@ -363,6 +389,10 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 
                     b.Property<int>("MaxVideoMegabytes")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("NomadUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("OllamaContextTokens")
                         .HasColumnType("INTEGER");
@@ -417,6 +447,62 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Settings");
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.KnowledgeDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Chunks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Collection")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("InboxEmailId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ItemKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NomadFilePath")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NomadSource")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UploadedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InboxEmailId");
+
+                    b.HasIndex("ItemKey")
+                        .IsUnique();
+
+                    b.ToTable("KnowledgeDocuments");
                 });
 
             modelBuilder.Entity("NomadInbox.Core.Domain.MailboxCursor", b =>

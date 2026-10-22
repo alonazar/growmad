@@ -8,6 +8,7 @@ using NomadInbox.Infrastructure.YouTube;
 using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
 using NomadInbox.Infrastructure.Ingest;
+using NomadInbox.Infrastructure.Knowledge;
 using NomadInbox.Infrastructure.Mail;
 using NomadInbox.Infrastructure.Settings;
 
@@ -61,6 +62,13 @@ public static class DependencyInjection
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<VideoDownloader>>()));
         services.AddSingleton<VideoTrigger>();
         services.AddHostedService<VideoDownloadWorker>();
+
+        // Phase 5: NOMAD's knowledge base, and deleting items.
+        services.AddSingleton<INomadKnowledgeBase>(new NomadKnowledgeClient(new HttpClient { Timeout = TimeSpan.FromMinutes(5) }));
+        services.AddSingleton<KnowledgeSyncService>();
+        services.AddSingleton<KnowledgeTrigger>();
+        services.AddHostedService<KnowledgeSyncWorker>();
+        services.AddSingleton<ItemDeletionService>();
 
         services.AddSingleton<LinkProcessor>();
         services.AddSingleton<LinkTrigger>();

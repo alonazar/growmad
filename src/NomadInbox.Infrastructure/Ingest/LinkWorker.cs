@@ -43,7 +43,8 @@ public sealed class LinkWorker(
     LinkProcessor processor,
     LinkTrigger trigger,
     SettingsService settingsService,
-    ILogger<LinkWorker> logger) : BackgroundService
+    ILogger<LinkWorker> logger,
+    Knowledge.KnowledgeTrigger? knowledgeTrigger = null) : BackgroundService
 {
     /// <summary>Also re-checks on this interval, so links waiting for the AI get summarized once Ollama is up.</summary>
     private static readonly TimeSpan Idle = TimeSpan.FromMinutes(2);
@@ -66,6 +67,7 @@ public sealed class LinkWorker(
                     outcome = new LinkOutcome(0, 0, 0);
                 }
 
+                if (outcome.Summarized > 0) knowledgeTrigger?.Signal(); // new summaries for NOMAD's knowledge base
                 if (!outcome.DidWork) await trigger.WaitAsync(Idle, stoppingToken);
             }
         }

@@ -10,6 +10,7 @@ using NomadInbox.Infrastructure;
 using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
 using NomadInbox.Infrastructure.Ingest;
+using NomadInbox.Infrastructure.Knowledge;
 using NomadInbox.Web.Auth;
 using NomadInbox.Web.Components;
 
@@ -95,6 +96,26 @@ app.MapGet("/attachments/{id:int}", async (int id, IDbContextFactory<NomadInboxD
         ? Results.File(path, file!.ContentType, file.FileName)
         : Results.NotFound();
 }).RequireAuthorization();
+
+app.MapPost("/emails/{id:int}/delete", async (int id, HttpContext context, IAntiforgery antiforgery,
+    ItemDeletionService deletion, KnowledgeTrigger knowledgeTrigger) =>
+{
+    await antiforgery.ValidateRequestAsync(context);
+    var form = await context.Request.ReadFormAsync();
+    var result = await deletion.DeleteAsync(id, deleteFiles: form["deleteFiles"] == "on", context.RequestAborted);
+    knowledgeTrigger.Signal(); // removes its documents from NOMAD's knowledge base
+    var message = result.Found ? $"Deleted{(result.FilesDeleted > 0 ? $", along with {result.FilesDeleted} file(s)" : "")}." : "It was already gone.";
+    return Results.LocalRedirect($"~/emails?message={Uri.EscapeDataString(message)}");
+}).RequireAuthorization().DisableAntiforgery(); // validated explicitly above
+
+app.MapPost("/emails/{id:int}/knowledge/resend", async (int id, HttpContext context, IAntiforgery antiforgery,
+    KnowledgeSyncService sync, KnowledgeTrigger knowledgeTrigger) =>
+{
+    await antiforgery.ValidateRequestAsync(context);
+    await sync.ResendEmailAsync(id, context.RequestAborted);
+    knowledgeTrigger.Signal();
+    return Results.LocalRedirect($"~/emails/{id}");
+}).RequireAuthorization().DisableAntiforgery(); // validated explicitly above
 
 // Saved videos, streamed with range support so the browser's player can seek.
 app.MapGet("/videos/{linkId:int}", async (int linkId, IDbContextFactory<NomadInboxDbContext> dbFactory,

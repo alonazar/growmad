@@ -9,13 +9,14 @@ NOMAD: Survival/Water #filtration #diy priority=high Ceramic filter builds
 
 and NOMAD Inbox records it, indexes it by the subject line, files its attachments, collects its links, and (in later phases) summarizes those links.
 
-**Status: Phase 4.** Done so far:
+**Status: Phase 5.** Done so far:
 - **Phase 1:** IMAP polling, subject indexing, sender allowlist, a web UI with login, SQLite storage and the Docker setup.
 - **Phase 2:** full message processing. That covers the body text, link extraction and classification, attachment filing with de-duplication and text extraction, and Gmail labels.
 - **Phase 3:** web links are fetched, their readable text is extracted, and NOMAD's Ollama summarizes them.
 - **Phase 4:** YouTube videos are summarized from their transcripts, channels and playlists get a profile, and followed channels add their new videos automatically.
+- **Phase 5:** everything goes into the knowledge base of NOMAD's AI Assistant, so you can ask about it in NOMAD's chat; items can be deleted.
 
-Pushing content into NOMAD comes next (see [Roadmap](#roadmap)).
+Hardening comes next (see [Roadmap](#roadmap)).
 
 ## Stack
 
@@ -212,6 +213,19 @@ If Ollama isn't installed, isn't running, or no model is chosen yet, links wait 
   - In **Jellyfin**, add a library of type *Movies* pointing at `/media/youtube` and turn off its internet metadata downloaders; it then shows each video with its summary, offline. **File Browser** sees the same files under `media/youtube`.
   - Videos also play on the email's page. A channel followed from a `#download` email downloads its new videos too. A one-off `nomad-inbox-init` service in `compose.yaml` creates the folder and makes it writable for the app; set `NOMADINBOX_VIDEO_DIR` in `.env` to use another folder.
 
+**5. NOMAD knowledge base.** A background sync puts everything into the knowledge base of NOMAD's AI Assistant, the documents its chat answers from, using the Command Center's API (`/api/rag/...`, no login needed on the local network). What goes in:
+
+- **Each summarized link** (web page, video, channel) as a Markdown document: title, source, site or channel, date, length, category and tags, the AI summary, chapters, and the full article or transcript. The full text is what makes answers specific; it can be turned off.
+- **Each stored attachment** NOMAD can read itself (PDF, Word, EPUB, text, images) as the original file. Other files with extracted text (PowerPoint, forwarded emails) go in as Markdown.
+- **An email note** when the email body has text of its own beyond links.
+
+How it's filed and kept in step:
+
+- **Collections.** Documents go into a collection named after the item's top-level category (`Survival/Water` → `survival`), so whole areas can be switched on or off in NOMAD's chat. Uncategorized items go into `nomad inbox`.
+- **Reconciliation.** The sync compares what *should* be in NOMAD with what NOMAD Inbox has sent: it uploads new documents, replaces changed ones (e.g. after **Summarize again**), and removes documents whose item was deleted. It runs after changes and every 2 minutes, sends at most 10 uploads per run, and shows NOMAD's embedding state (*Embedding…* → *Indexed · N chunks*) on each item's page.
+- **Controls.** **Resend** (per item) and **Resend everything** (Settings) send again. If NOMAD isn't reachable, it simply waits.
+- **Deleting.** **Delete…** on an item's page removes it with its links and attachments, and optionally its files: attachments and saved videos, unless another item uses them. Its documents are removed from NOMAD on the next sync, and its Message-ID is remembered, so a folder rescan or channel check won't bring it back.
+
 ### Setting up summaries
 
 1. In NOMAD's Command Center, install the **AI Assistant** (it runs Ollama in the `nomad_ollama` container on port 11434).
@@ -229,5 +243,5 @@ The summary instructions can be changed under **Summary instructions (advanced)*
 2. ~~Fetch full messages: file attachments (with de-duplication and text extraction), extract links, label processed mail in Gmail~~
 3. ~~Web links: readable-text extraction and summaries from NOMAD's Ollama~~
 4. ~~YouTube: video transcripts with yt-dlp, channel profiles, following channels~~
-5. Push summaries and documents into NOMAD's knowledge base (`/api/rag/upload`); optional Kiwix ZIM archives
+5. ~~Push summaries and documents into NOMAD's knowledge base~~ (optional Kiwix ZIM archives: not done)
 6. Hardening: retries with backoff, backups, OCR for scanned PDFs

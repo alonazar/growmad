@@ -7,6 +7,9 @@
 @inject IMailboxReader MailboxReader
 @inject MailIngestService Ingest
 @inject NomadInbox.Infrastructure.Ai.OllamaClient Ollama
+@inject NomadInbox.Infrastructure.Knowledge.INomadKnowledgeBase Nomad
+@inject NomadInbox.Infrastructure.Knowledge.KnowledgeSyncService KnowledgeSync
+@inject NomadInbox.Infrastructure.Knowledge.KnowledgeTrigger KnowledgeTrigger
 @using NomadInbox.Infrastructure.Ai
 
 <PageTitle>Settings · NOMAD Inbox</PageTitle>
@@ -152,6 +155,46 @@
                                        placeholder="@Summarizer.DefaultPrompt" />
                         <div class="form-text">Leave empty to use the built-in instructions shown as the placeholder.</div>
                     </details>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">NOMAD knowledge base</h2>
+                    <p class="text-muted small">
+                        Summaries (with the full article or transcript), attachments and email notes are added to the
+                        knowledge base of NOMAD's AI Assistant, so you can ask about them in NOMAD's chat. Changes and deletions are kept in step.
+                    </p>
+                    <div class="form-check form-switch mb-3">
+                        <InputCheckbox id="kb" class="form-check-input" @bind-Value="form.KnowledgeBaseEnabled" />
+                        <label class="form-check-label" for="kb">Send items to NOMAD's knowledge base</label>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="nomadUrl">NOMAD Command Center address</label>
+                            <InputText id="nomadUrl" class="form-control" @bind-Value="form.NomadUrl" disabled="@(!form.KnowledgeBaseEnabled)" />
+                            <div class="form-text">From the container: <code>http://host.docker.internal:8080</code>.</div>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="kbDefault">Collection for uncategorized items</label>
+                            <InputText id="kbDefault" class="form-control" @bind-Value="form.KnowledgeDefaultCollection" disabled="@(!form.KnowledgeBaseEnabled)" />
+                        </div>
+                    </div>
+                    <div class="form-check form-switch mt-3">
+                        <InputCheckbox id="kbCat" class="form-check-input" @bind-Value="form.KnowledgeCollectionPerCategory" disabled="@(!form.KnowledgeBaseEnabled)" />
+                        <label class="form-check-label" for="kbCat">One collection per top-level category (e.g. <code>Survival/Water</code> → <code>survival</code>)</label>
+                    </div>
+                    <div class="form-check form-switch mt-2">
+                        <InputCheckbox id="kbFull" class="form-check-input" @bind-Value="form.KnowledgeIncludeFullText" disabled="@(!form.KnowledgeBaseEnabled)" />
+                        <label class="form-check-label" for="kbFull">Include the full article or transcript, not just the summary (better answers)</label>
+                    </div>
+                    <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="TestNomadAsync"
+                                disabled="@(!form.KnowledgeBaseEnabled || testingNomad)">@(testingNomad ? "Checking…" : "Test connection")</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResendAllAsync"
+                                disabled="@(!form.KnowledgeBaseEnabled)">Resend everything</button>
+                        @if (nomadMessage is not null) { <span class="small @(nomadOk ? "text-success" : "text-danger")">@nomadMessage</span> }
+                    </div>
                 </div>
             </section>
 
@@ -312,6 +355,44 @@
     private ConnectionTestResult? testResult;
     private string? saveMessage, resetMessage;
     private string sample = "NOMAD: Survival/Water #filtration #diy priority=high Ceramic filter builds";
+    private bool testingNomad, nomadOk;
+    private string? nomadMessage;
+
+    private async Task TestNomadAsync()
+    {
+        testingNomad = true;
+        nomadMessage = null;
+        try
+        {
+            var url = form!.NomadUrl ?? "";
+            if (!await Nomad.IsAvailableAsync(url, CancellationToken.None))
+                throw new NomadInbox.Infrastructure.Knowledge.NomadException(
+                    $"No knowledge base answering at {url}. Is NOMAD's AI Assistant installed?");
+            var files = await Nomad.ListFilesAsync(url, CancellationToken.None);
+            nomadOk = true;
+            nomadMessage = $"Connected. NOMAD's knowledge base holds {files.Count} file(s).";
+        }
+        catch (NomadInbox.Infrastructure.Knowledge.NomadException ex)
+        {
+            nomadOk = false;
+            nomadMessage = ex.Message;
+        }
+        finally
+        {
+            testingNomad = false;
+        }
+    }
+
+    private async Task ResendAllAsync()
+    {
+        var count = await KnowledgeSync.ResendAllAsync(CancellationToken.None);
+        KnowledgeTrigger.Signal();
+        nomadOk = true;
+        nomadMessage = count == 0
+            ? "Nothing sent yet; items go out on the next sync."
+            : $"{count} document(s) will be sent again over the next few minutes (10 at a time).";
+    }
+
     private IReadOnlyList<OllamaModel> models = [];
     private bool loadingModels, testingAi, aiTestOk;
     private string? modelsMessage, aiTestResult;
@@ -450,6 +531,11 @@
         public VideoDownloadMode VideoDownloadMode { get; set; }
         public int MaxVideoHeight { get; set; }
         [Range(10, 100000, ErrorMessage = "Choose between 10 and 100000 MB.")] public int MaxVideoMegabytes { get; set; }
+        public bool KnowledgeBaseEnabled { get; set; }
+        public string? NomadUrl { get; set; }
+        public bool KnowledgeIncludeFullText { get; set; }
+        public bool KnowledgeCollectionPerCategory { get; set; }
+        public string? KnowledgeDefaultCollection { get; set; }
         public bool SummariesEnabled { get; set; }
         public string? OllamaUrl { get; set; }
         public string? OllamaModel { get; set; }
@@ -461,6 +547,8 @@
             AllowPrivateNetworkLinks = s.AllowPrivateNetworkLinks, RenderJavaScriptPages = s.RenderJavaScriptPages,
             TranscriptLanguages = s.TranscriptLanguages, FollowCheckHours = s.FollowCheckHours,
             VideoDownloadMode = s.VideoDownloadMode, MaxVideoHeight = s.MaxVideoHeight, MaxVideoMegabytes = s.MaxVideoMegabytes,
+            KnowledgeBaseEnabled = s.KnowledgeBaseEnabled, NomadUrl = s.NomadUrl, KnowledgeIncludeFullText = s.KnowledgeIncludeFullText,
+            KnowledgeCollectionPerCategory = s.KnowledgeCollectionPerCategory, KnowledgeDefaultCollection = s.KnowledgeDefaultCollection,
             SummariesEnabled = s.SummariesEnabled,
             OllamaUrl = s.OllamaUrl, OllamaModel = s.OllamaModel, OllamaContextTokens = s.OllamaContextTokens,
             SummaryPrompt = s.SummaryPrompt,
@@ -494,6 +582,11 @@
             s.VideoDownloadMode = VideoDownloadMode;
             s.MaxVideoHeight = MaxVideoHeight;
             s.MaxVideoMegabytes = MaxVideoMegabytes;
+            s.KnowledgeBaseEnabled = KnowledgeBaseEnabled;
+            s.NomadUrl = string.IsNullOrWhiteSpace(NomadUrl) ? "http://host.docker.internal:8080" : NomadUrl.Trim().TrimEnd('/');
+            s.KnowledgeIncludeFullText = KnowledgeIncludeFullText;
+            s.KnowledgeCollectionPerCategory = KnowledgeCollectionPerCategory;
+            s.KnowledgeDefaultCollection = string.IsNullOrWhiteSpace(KnowledgeDefaultCollection) ? "nomad inbox" : KnowledgeDefaultCollection.Trim();
             s.SummariesEnabled = SummariesEnabled;
             s.OllamaUrl = string.IsNullOrWhiteSpace(OllamaUrl) ? "http://host.docker.internal:11434" : OllamaUrl.Trim().TrimEnd('/');
             s.OllamaModel = OllamaModel?.Trim() ?? "";

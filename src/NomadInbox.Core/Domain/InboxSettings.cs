@@ -68,6 +68,17 @@ public class InboxSettings
         TranscriptLanguages.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(l => l.ToLowerInvariant()).DefaultIfEmpty("en").ToList();
 
+    // NOMAD knowledge base (Phase 5).
+    public bool KnowledgeBaseEnabled { get; set; } = true;
+    /// <summary>NOMAD's Command Center, as seen from the container.</summary>
+    public string NomadUrl { get; set; } = "http://host.docker.internal:8080";
+    /// <summary>Send the full article/transcript with each summary (better answers) or only the summary.</summary>
+    public bool KnowledgeIncludeFullText { get; set; } = true;
+    /// <summary>File each item into a collection named after its top-level category.</summary>
+    public bool KnowledgeCollectionPerCategory { get; set; } = true;
+    /// <summary>Collection for uncategorized items, or for everything when per-category is off.</summary>
+    public string KnowledgeDefaultCollection { get; set; } = "nomad inbox";
+
     public bool IsAiConfigured =>
         SummariesEnabled && !string.IsNullOrWhiteSpace(OllamaUrl) && !string.IsNullOrWhiteSpace(OllamaModel);
 
