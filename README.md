@@ -110,15 +110,40 @@ If it shows as **Ignored**, the sender address isn't on your allowlist exactly a
 
 ## Run on the NOMAD host (Ubuntu / WSL2)
 
-Requires Docker, which the NOMAD installer already set up.
+Requires Docker, which the NOMAD installer already set up. One command installs NOMAD Inbox, and the same command updates it later.
+
+**While the repository is private,** create a fine-grained GitHub token (GitHub → Settings → Developer settings → Fine-grained tokens):
+- repository access: only `alonazar/growmad`
+- permission: **Contents: Read-only**
+
+Then run, as your normal user (not root):
 
 ```bash
-git clone https://github.com/alonazar/growmad.git ~/nomad-inbox && cd ~/nomad-inbox
-cp .env.example .env    # set NOMADINBOX_ADMIN_PASSWORD (and TZ)
-docker compose up -d --build
+export GITHUB_TOKEN=github_pat_...
+curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
 ```
 
-The repository is private. On WSL, let Ubuntu's git use the Windows GitHub login, through Git for Windows' credential manager:
+If the repository is made public, no token is needed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
+```
+
+The [install script](install.sh):
+- checks the system (Ubuntu/Debian, Docker with compose) and installs `git`, `curl` and `openssl` if missing
+- downloads the code into `~/nomad-inbox` with `git`. The token is passed for that one command only and never written to disk.
+- creates `.env` with a generated admin password, the server's time zone and a free port (8150, or the next free one)
+- builds and starts the containers, waits until NOMAD Inbox answers, and prints the address and login
+
+Run again, the same command updates to the latest `main`. It keeps `.env` and all data, and stops if tracked files were changed locally. Options are environment variables, documented at the top of the script:
+- `NOMADINBOX_DIR`: install folder
+- `NOMADINBOX_BRANCH`: branch to install
+- `NOMADINBOX_PORT`: web port for a new install
+- `NOMADINBOX_REPO`: repository to install from
+
+If Project NOMAD isn't installed on the machine, saved videos go to `~/nomad-inbox/videos`, and AI summaries and the knowledge base stay off until NOMAD's AI Assistant is available.
+
+On WSL you can skip the token and use your Windows GitHub login instead, through Git for Windows' credential manager. After this one-time setting, `git` in `~/nomad-inbox` works without a token:
 
 ```bash
 git config --global credential.helper '/mnt/c/Program\ Files/Git/ucrt64/bin/git-credential-manager.exe'
@@ -131,7 +156,7 @@ Data lives in the `nomad-inbox-data` volume:
 - `keys/`, which decrypts the stored app password (back it up together with the database)
 - `files/`, the filed attachments
 
-To update to the latest version on GitHub (your `.env` and data are kept; database migrations run automatically on start):
+To update to the latest version on GitHub, run the install command again, or do it by hand. Your `.env` and data are kept, and database migrations run automatically on start:
 
 ```bash
 cd ~/nomad-inbox && git pull && docker compose up -d --build
