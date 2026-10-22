@@ -112,9 +112,15 @@ If it shows as **Ignored**, the sender address isn't on your allowlist exactly a
 Requires Docker, which the NOMAD installer already set up.
 
 ```bash
-git clone <this repo> nomad-inbox && cd nomad-inbox
+git clone https://github.com/alonazar/growmad.git ~/nomad-inbox && cd ~/nomad-inbox
 cp .env.example .env    # set NOMADINBOX_ADMIN_PASSWORD (and TZ)
 docker compose up -d --build
+```
+
+The repository is private. On WSL, let Ubuntu's git use the Windows GitHub login, through Git for Windows' credential manager:
+
+```bash
+git config --global credential.helper '/mnt/c/Program\ Files/Git/ucrt64/bin/git-credential-manager.exe'
 ```
 
 Open `http://<host>:8150` (from Windows with WSL2: `http://localhost:8150`). Port 8150 avoids NOMAD's own apps (8080, 8090, 8100-8500, 9999, 11434).
@@ -124,7 +130,11 @@ Data lives in the `nomad-inbox-data` volume:
 - `keys/`, which decrypts the stored app password (back it up together with the database)
 - `files/`, the filed attachments
 
-To update after changing the code, copy the source into `~/nomad-inbox` (keep its `.env`), then run `docker compose up -d --build`. Database migrations run automatically on start.
+To update to the latest version on GitHub (your `.env` and data are kept; database migrations run automatically on start):
+
+```bash
+cd ~/nomad-inbox && git pull && docker compose up -d --build
+```
 
 **WSL note:** WSL shuts down idle distros, which stops polling. Keep the distro running, for example by starting it at Windows login, or by setting `vmIdleTimeout=-1` under `[wsl2]` in `%UserProfile%\.wslconfig`.
 
