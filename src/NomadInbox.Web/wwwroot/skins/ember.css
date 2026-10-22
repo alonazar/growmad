@@ -1,0 +1,48 @@
+/* Ember: campfire and cabin at night. Warm charcoal, ember orange, a slab serif for headings. */
+@font-face {
+    font-family: "Bitter";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/bitter/bitter-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+    font-family: "Source Sans 3";
+    font-style: normal;
+    font-weight: 200 900;
+    font-display: swap;
+    src: url("../fonts/source-sans-3/source-sans-3-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+[data-skin="ember"] {
+    --nomad-font-body: "Source Sans 3", system-ui, "Segoe UI", Arial, sans-serif;
+    --nomad-font-heading: "Bitter", Georgia, "Times New Roman", serif;
+    --nomad-font-mono: ui-monospace, Consolas, "Liberation Mono", monospace;
+    --nomad-heading-weight: 650;
+
+    --nomad-bg: light-dark(#FAF7F2, #1A1614);
+    --nomad-surface: light-dark(#FFFFFF, #241E1B);
+    --nomad-surface-2: light-dark(#F3ECE4, #2E2622);
+    --nomad-text: light-dark(#2B2522, #EDE3DA);
+    --nomad-muted: light-dark(#6B5F57, #B0A197);
+    --nomad-border: light-dark(#E6DDD3, #3A312C);
+    --nomad-link: light-dark(#9A3412, #FDBA74);
+    --nomad-accent: light-dark(#C2410C, #F97316);
+    --nomad-on-accent: light-dark(#FFFFFF, #1A1614);
+    --nomad-focus: light-dark(#EA580C, #FB923C);
+
+    --nomad-topbar-bg: light-dark(#FFFFFF, #201A17);
+    --nomad-topbar-text: light-dark(#2B2522, #EDE3DA);
+    --nomad-topbar-border: light-dark(#EAD9C8, #3A312C);
+
+    --nomad-sidebar-bg: light-dark(#2A2421, #120F0D);
+    --nomad-sidebar-bg-2: light-dark(#3B2A21, #2A1810);
+    --nomad-sidebar-text: light-dark(#EDE3DA, #E6D9CE);
+    --nomad-brand-bg: light-dark(#1E1917, #0B0908);
+    --nomad-sidebar-active-bg: light-dark(#4A3A31, #33231B);
+    --nomad-sidebar-active-text: #FFF7ED;
+    --nomad-sidebar-marker: #F97316;
+    /* Glow of the coals at the foot of the sidebar. */
+    --nomad-sidebar-texture: radial-gradient(130% 40% at 50% 108%, rgb(249 115 22 / 0.3), transparent 70%);
+}

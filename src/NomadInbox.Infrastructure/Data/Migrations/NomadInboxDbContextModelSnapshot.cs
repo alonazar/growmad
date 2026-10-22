@@ -416,6 +416,11 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<bool>("ApplyLabels")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ColorMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("FailedLabel")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -509,6 +514,11 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 
                     b.Property<int>("SaveLinkedPagesLimit")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Skin")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SubjectPrefix")
                         .IsRequired()

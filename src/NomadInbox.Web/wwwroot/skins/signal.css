@@ -1,0 +1,61 @@
+/* Signal: ham radio console by night, field logbook by day. Phosphor green, amber focus, mono labels. */
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/ibm-plex-mono/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+}
+
+[data-skin="signal"] {
+    --nomad-font-body: "IBM Plex Sans", system-ui, "Segoe UI", Arial, sans-serif;
+    --nomad-font-heading: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    --nomad-font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    --nomad-heading-weight: 500;
+    --nomad-heading-transform: uppercase;
+    --nomad-heading-tracking: 0.04em;
+    --nomad-nav-font: var(--nomad-font-mono);
+    --nomad-nav-transform: uppercase;
+    --nomad-nav-tracking: 0.08em;
+
+    --nomad-bg: light-dark(#F5F3EA, #0B0F0C);
+    --nomad-surface: light-dark(#FFFEF8, #121A15);
+    --nomad-surface-2: light-dark(#ECE9DC, #18221B);
+    --nomad-text: light-dark(#1C2420, #D6E4D8);
+    --nomad-muted: light-dark(#55605A, #8FA597);
+    --nomad-border: light-dark(#D5D2C3, #22302A);
+    --nomad-link: light-dark(#1F6F43, #4ADE80);
+    --nomad-accent: light-dark(#1F6F43, #4ADE80);
+    --nomad-on-accent: light-dark(#FFFFFF, #0B0F0C);
+    --nomad-focus: light-dark(#B45309, #FBBF24);
+
+    --nomad-topbar-bg: light-dark(#ECE9DC, #0F1511);
+    --nomad-topbar-text: light-dark(#1C2420, #D6E4D8);
+    --nomad-topbar-border: light-dark(#D5D2C3, #1F3A2A);
+
+    --nomad-sidebar-bg: light-dark(#1C2420, #070A08);
+    --nomad-sidebar-bg-2: light-dark(#141A17, #070A08);
+    --nomad-sidebar-text: light-dark(#CFE3D4, #BFD8C6);
+    --nomad-brand-bg: light-dark(#0F1411, #030504);
+    --nomad-sidebar-active-bg: light-dark(#26332C, #10261A);
+    --nomad-sidebar-active-text: #4ADE80;
+    --nomad-sidebar-marker: #4ADE80;
+    /* Faint scan lines, like an old console display. */
+    --nomad-sidebar-texture: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 3px);
+}

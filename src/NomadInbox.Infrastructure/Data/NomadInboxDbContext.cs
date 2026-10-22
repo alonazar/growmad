@@ -94,6 +94,8 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
             e.Ignore(x => x.TranscriptLanguageList);
             e.Property(x => x.VideoDownloadMode).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.PageArchiveMode).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Skin).HasMaxLength(40);
+            e.Property(x => x.ColorMode).HasConversion<string>().HasMaxLength(20);
         });
 
         model.Entity<MailboxCursor>(e => e.HasKey(x => x.Folder));

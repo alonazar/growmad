@@ -1,13 +1,24 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿@using NomadInbox.Core.Appearance
+@inject SettingsService SettingsService
+
+<!DOCTYPE html>
+<html lang="en" data-skin="@appearance.Skin.Id" data-mode="@appearance.ModeAttribute" data-bs-theme="@appearance.BootstrapTheme">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    @* Before any stylesheet: in System mode it picks Bootstrap's light or dark theme before the first paint. *@
+    <script src="@Assets["appearance.js"]"></script>
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["skins/_base.css"]" />
+    @* All skins are small and scoped by [data-skin], so switching needs no reload; fonts load only when used. *@
+    @foreach (var skin in SkinCatalog.All)
+    {
+        <link rel="stylesheet" href="@Assets[$"skins/{skin.Id}.css"]" />
+    }
     <link rel="stylesheet" href="@Assets["NomadInbox.Web.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -15,9 +26,28 @@
 </head>
 
 <body>
-    <Routes />
+    <CascadingValue Value="appearance" IsFixed="true">
+        <Routes />
+    </CascadingValue>
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 
 </html>
+
+@code {
+    private UiAppearance appearance = new(SkinCatalog.Get(null), ColorMode.System);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settings = await SettingsService.GetAsync();
+            appearance = new(SkinCatalog.Get(settings.Skin), settings.ColorMode);
+        }
+        catch (Exception)
+        {
+            // The error page must still render when the database is the problem; it gets the default look.
+        }
+    }
+}

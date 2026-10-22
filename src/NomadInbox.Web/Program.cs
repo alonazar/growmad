@@ -11,6 +11,7 @@ using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Knowledge;
+using NomadInbox.Infrastructure.Settings;
 using NomadInbox.Web;
 using NomadInbox.Web.Auth;
 using NomadInbox.Web.Components;
@@ -90,6 +91,15 @@ app.MapPost("/account/logout", async (HttpContext context, [FromForm] string? re
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.LocalRedirect("~/login");
 });
+
+// The top bar's light/dark toggle: System → Light → Dark → System.
+app.MapPost("/appearance/mode", async (SettingsService settings, [FromForm] string? returnUrl) =>
+{
+    var current = await settings.GetAsync();
+    await settings.SaveAppearanceAsync(current.Skin, UiAppearance.Next(current.ColorMode));
+    var local = returnUrl is ['/', not '/' and not '\\', ..] or "/";
+    return Results.LocalRedirect(local ? returnUrl! : "~/");
+}).RequireAuthorization();
 
 app.MapGet("/attachments/{id:int}", async (int id, IDbContextFactory<NomadInboxDbContext> dbFactory, AttachmentStore store) =>
 {

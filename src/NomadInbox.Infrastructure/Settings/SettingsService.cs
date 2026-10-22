@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using NomadInbox.Core.Appearance;
 using NomadInbox.Core.Domain;
 using NomadInbox.Core.Mail;
 using NomadInbox.Infrastructure.Data;
@@ -33,7 +34,12 @@ public sealed class SettingsService(
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (await db.Settings.AnyAsync(s => s.Id == InboxSettings.SingletonId, ct))
+        {
             db.Settings.Update(settings);
+            // Appearance has its own save (it applies at once), so a form loaded earlier must not undo it.
+            db.Entry(settings).Property(s => s.Skin).IsModified = false;
+            db.Entry(settings).Property(s => s.ColorMode).IsModified = false;
+        }
         else
             db.Settings.Add(settings);
         await db.SaveChangesAsync(ct);
@@ -43,6 +49,18 @@ public sealed class SettingsService(
             settings.IsMailConfigured, !string.IsNullOrEmpty(newPassword), settings.PollingEnabled,
             settings.PollIntervalMinutes, settings.AllowedSenderList.Count, settings.ApplyLabels);
         Changed?.Invoke();
+    }
+
+    /// <summary>Saves only the web app's look; an unknown skin id is stored as the default skin.</summary>
+    public async Task SaveAppearanceAsync(string skin, ColorMode mode, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var settings = await db.Settings.SingleOrDefaultAsync(s => s.Id == InboxSettings.SingletonId, ct);
+        if (settings is null)
+            db.Settings.Add(settings = new InboxSettings());
+        settings.Skin = SkinCatalog.Get(skin).Id;
+        settings.ColorMode = mode;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Builds connection details, preferring <paramref name="passwordOverride"/> (e.g. typed but not yet saved).</summary>
