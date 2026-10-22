@@ -1,0 +1,30 @@
+/* Classic: the original NOMAD Inbox look (navy-to-plum sidebar), plus a dark variant. System fonts only. */
+[data-skin="classic"] {
+    --nomad-font-body: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --nomad-font-heading: var(--nomad-font-body);
+    --nomad-font-mono: SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --nomad-heading-weight: 500;
+
+    --nomad-bg: light-dark(#FFFFFF, #16181D);
+    --nomad-surface: light-dark(#FFFFFF, #1E2128);
+    --nomad-surface-2: light-dark(#F3F4F6, #272B33);
+    --nomad-text: light-dark(#212529, #DEE2E6);
+    --nomad-muted: light-dark(#5C636A, #A7ACB3);
+    --nomad-border: light-dark(#DEE2E6, #353B45);
+    --nomad-link: light-dark(#006BB7, #6EA8FE);
+    --nomad-accent: light-dark(#1B6EC2, #5B9DFF);
+    --nomad-on-accent: light-dark(#FFFFFF, #0B1220);
+    --nomad-focus: light-dark(#258CFB, #6EA8FE);
+
+    --nomad-topbar-bg: light-dark(#F7F7F7, #1B1E24);
+    --nomad-topbar-text: light-dark(#212529, #DEE2E6);
+    --nomad-topbar-border: light-dark(#D6D5D5, #2C313A);
+
+    --nomad-sidebar-bg: light-dark(#052767, #031A45);
+    --nomad-sidebar-bg-2: light-dark(#3A0647, #26032F);
+    --nomad-sidebar-text: light-dark(#D7D7D7, #D0D0D6);
+    --nomad-brand-bg: light-dark(#03173E, #020F29);
+    --nomad-sidebar-active-bg: light-dark(#4B5F8A, #34466E);
+    --nomad-sidebar-active-text: #FFFFFF;
+    --nomad-sidebar-marker: transparent;
+}

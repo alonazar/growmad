@@ -1,0 +1,68 @@
+/* Basecamp: topo map and trail gear. Olive and sand, blaze-orange trail markers, condensed signage type. */
+@font-face {
+    font-family: "Barlow";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/barlow/barlow-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Barlow";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/barlow/barlow-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Barlow Condensed";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/barlow-condensed/barlow-condensed-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Barlow Condensed";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/barlow-condensed/barlow-condensed-latin-700-normal.woff2") format("woff2");
+}
+
+[data-skin="basecamp"] {
+    --nomad-font-body: "Barlow", system-ui, "Segoe UI", Arial, sans-serif;
+    --nomad-font-heading: "Barlow Condensed", "Arial Narrow", "Barlow", sans-serif;
+    --nomad-font-mono: ui-monospace, Consolas, "Liberation Mono", monospace;
+    --nomad-heading-transform: uppercase;
+    --nomad-heading-tracking: 0.03em;
+    --nomad-nav-font: var(--nomad-font-heading);
+    --nomad-nav-transform: uppercase;
+    --nomad-nav-tracking: 0.06em;
+
+    --nomad-bg: light-dark(#F4F1E8, #171A14);
+    --nomad-surface: light-dark(#FFFDF7, #20241C);
+    --nomad-surface-2: light-dark(#ECE7D8, #2A2F25);
+    --nomad-text: light-dark(#23271E, #E6E2D3);
+    --nomad-muted: light-dark(#5C604F, #A3A58F);
+    --nomad-border: light-dark(#D9D3C1, #363B2E);
+    --nomad-link: light-dark(#2F5D3A, #A9CB96);
+    --nomad-accent: light-dark(#B4471B, #E8844A);
+    --nomad-on-accent: light-dark(#FFFFFF, #171A14);
+    --nomad-focus: light-dark(#B4471B, #E8A33D);
+
+    --nomad-topbar-bg: light-dark(#E9E4D4, #1D2119);
+    --nomad-topbar-text: light-dark(#23271E, #E6E2D3);
+    --nomad-topbar-border: light-dark(#D2CBB6, #2E3328);
+
+    --nomad-sidebar-bg: light-dark(#2F3B2A, #12160F);
+    --nomad-sidebar-bg-2: light-dark(#1F2A1C, #0C0F0A);
+    --nomad-sidebar-text: light-dark(#E6E2D3, #D9D5C4);
+    --nomad-brand-bg: light-dark(#1A2317, #0A0C08);
+    --nomad-sidebar-active-bg: light-dark(#3E4B37, #252B1F);
+    --nomad-sidebar-active-text: #F7F3E6;
+    --nomad-sidebar-marker: light-dark(#E8A33D, #E8844A);
+    /* Faint contour lines, like a topographic map. */
+    --nomad-sidebar-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.07' stroke-width='1.2'%3E%3Cpath d='M130 70c38 2 62 26 58 56s-30 52-66 50-60-24-56-56 26-52 64-50z'/%3E%3Cpath d='M131 42c56 3 90 38 84 82s-44 78-96 74-86-36-80-82 36-77 92-74z'/%3E%3Cpath d='M132 14c72 4 118 50 110 108s-58 104-126 98S2 172 10 112 60 10 132 14z'/%3E%3Cpath d='M128 98c20 1 32 13 30 28s-16 26-34 25-30-12-28-28 12-26 32-25z'/%3E%3C/g%3E%3C/svg%3E");
+}

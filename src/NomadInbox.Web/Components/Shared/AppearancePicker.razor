@@ -1,0 +1,82 @@
+@using NomadInbox.Core.Appearance
+@inject SettingsService SettingsService
+@inject IJSRuntime JS
+
+@* Saves on click, apart from the Settings form, so the new look shows at once. *@
+<section class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5">Appearance</h2>
+        <p class="text-muted small">
+            Applies right away, on every device. Saved pages keep their own look (see Saved pages below).
+        </p>
+
+        <div class="skin-grid mb-3" role="radiogroup" aria-label="Skin">
+            @foreach (var skin in SkinCatalog.All)
+            {
+                var selected = skin.Id == skinId;
+                <button type="button" role="radio" aria-checked="@(selected ? "true" : "false")"
+                        class="skin-option @(selected ? "selected" : null)" disabled="@busy"
+                        @onclick="() => ApplyAsync(skin.Id, mode)">
+                    @* A miniature of the app drawn with the skin's own stylesheet. *@
+                    <span class="skin-preview" data-skin="@skin.Id" aria-hidden="true">
+                        <span class="sp-sidebar"><span class="sp-brand"></span><span class="sp-nav active"></span><span class="sp-nav"></span><span class="sp-nav"></span></span>
+                        <span class="sp-main">
+                            <span class="sp-topbar"></span>
+                            <span class="sp-card"><span class="sp-title">Aa</span><span class="sp-line"></span><span class="sp-line short"></span><span class="sp-button"></span></span>
+                        </span>
+                    </span>
+                    <span class="d-block fw-semibold mt-2">@skin.Name</span>
+                    <span class="d-block small text-muted">@skin.Description</span>
+                    <span class="d-block small text-muted mt-1">@skin.Fonts</span>
+                </button>
+            }
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div class="btn-group" role="group" aria-label="Light or dark">
+                @foreach (var option in Enum.GetValues<ColorMode>())
+                {
+                    <input type="radio" class="btn-check" name="colorMode" id="mode-@option" autocomplete="off"
+                           checked="@(option == mode)" disabled="@busy" @onchange="() => ApplyAsync(skinId, option)" />
+                    <label class="btn btn-outline-secondary btn-sm" for="mode-@option">@option</label>
+                }
+            </div>
+            <span class="form-text m-0">System follows each device's light or dark setting.</span>
+            @if (error is not null) { <span class="text-danger small">@error</span> }
+        </div>
+    </div>
+</section>
+
+@code {
+    private string skinId = SkinCatalog.DefaultId;
+    private ColorMode mode;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await SettingsService.GetAsync();
+        skinId = SkinCatalog.Get(settings.Skin).Id;
+        mode = settings.ColorMode;
+    }
+
+    private async Task ApplyAsync(string skin, ColorMode newMode)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await SettingsService.SaveAppearanceAsync(skin, newMode);
+            (skinId, mode) = (skin, newMode);
+            await JS.InvokeVoidAsync("nomadAppearance.apply", skin, UiAppearance.ModeName(newMode));
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not change the look: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

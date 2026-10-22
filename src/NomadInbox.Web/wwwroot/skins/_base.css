@@ -1,0 +1,124 @@
+/*
+ * Skins: shared rules. A skin is a file next to this one (skins/{id}.css) that sets the tokens below on
+ * [data-skin="{id}"], usually as light-dark(light value, dark value). App.razor puts data-skin, data-mode
+ * and data-bs-theme on <html>; this file turns the tokens into Bootstrap variables and layout colors.
+ *
+ * Required tokens (SkinTests checks every skin file for them, and the contrast of the text pairs):
+ *   --nomad-font-body  --nomad-font-heading  --nomad-font-mono
+ *   main area:  --nomad-bg  --nomad-surface  --nomad-surface-2  --nomad-text  --nomad-muted  --nomad-border
+ *               --nomad-link  --nomad-accent  --nomad-on-accent  --nomad-focus
+ *   top bar:    --nomad-topbar-bg  --nomad-topbar-text  --nomad-topbar-border
+ *   sidebar:    --nomad-sidebar-bg  --nomad-sidebar-bg-2  --nomad-sidebar-text  --nomad-brand-bg
+ *               --nomad-sidebar-active-bg  --nomad-sidebar-active-text  --nomad-sidebar-marker
+ * Optional (defaults below): heading weight/transform/tracking, nav font/transform/tracking, sidebar texture.
+ */
+
+:root {
+    --nomad-heading-weight: 600;
+    --nomad-heading-transform: none;
+    --nomad-heading-tracking: normal;
+    --nomad-nav-font: var(--nomad-font-body);
+    --nomad-nav-transform: none;
+    --nomad-nav-tracking: normal;
+    --nomad-sidebar-texture: none;
+}
+
+[data-mode="light"] { color-scheme: light; }
+[data-mode="dark"] { color-scheme: dark; }
+[data-mode="system"] { color-scheme: light dark; }
+
+[data-skin] {
+    --bs-body-font-family: var(--nomad-font-body);
+    --bs-font-sans-serif: var(--nomad-font-body);
+    --bs-font-monospace: var(--nomad-font-mono);
+    --bs-body-bg: var(--nomad-bg);
+    --bs-body-color: var(--nomad-text);
+    --bs-emphasis-color: var(--nomad-text);
+    --bs-heading-color: var(--nomad-text);
+    --bs-secondary-color: var(--nomad-muted);
+    --bs-tertiary-color: var(--nomad-muted);
+    --bs-secondary-bg: var(--nomad-surface-2);
+    --bs-tertiary-bg: var(--nomad-surface-2);
+    --bs-border-color: var(--nomad-border);
+    --bs-border-color-translucent: color-mix(in srgb, var(--nomad-border) 75%, transparent);
+    --bs-focus-ring-color: color-mix(in srgb, var(--nomad-focus) 45%, transparent);
+}
+
+body {
+    font-family: var(--nomad-font-body);
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+    font-family: var(--nomad-font-heading);
+    font-weight: var(--nomad-heading-weight);
+    text-transform: var(--nomad-heading-transform);
+    letter-spacing: var(--nomad-heading-tracking);
+}
+
+a, .btn-link {
+    color: var(--nomad-link);
+}
+
+a:hover, .btn-link:hover {
+    color: color-mix(in srgb, var(--nomad-link) 75%, var(--nomad-text));
+}
+
+/* Surfaces sit on the page background. */
+.card, .list-group {
+    --bs-card-bg: var(--nomad-surface);
+    --bs-list-group-bg: var(--nomad-surface);
+}
+
+.table {
+    --bs-table-bg: transparent;
+}
+
+.form-control, .form-select {
+    background-color: var(--nomad-surface);
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: var(--nomad-surface);
+    border-color: var(--nomad-focus);
+}
+
+.form-check-input:checked {
+    background-color: var(--nomad-accent);
+    border-color: var(--nomad-accent);
+}
+
+.btn-primary {
+    --bs-btn-color: var(--nomad-on-accent);
+    --bs-btn-bg: var(--nomad-accent);
+    --bs-btn-border-color: var(--nomad-accent);
+    --bs-btn-hover-color: var(--nomad-on-accent);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--nomad-accent) 85%, var(--nomad-text));
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--nomad-accent) 85%, var(--nomad-text));
+    --bs-btn-active-color: var(--nomad-on-accent);
+    --bs-btn-active-bg: color-mix(in srgb, var(--nomad-accent) 75%, var(--nomad-text));
+    --bs-btn-active-border-color: color-mix(in srgb, var(--nomad-accent) 75%, var(--nomad-text));
+    --bs-btn-disabled-color: var(--nomad-on-accent);
+    --bs-btn-disabled-bg: var(--nomad-accent);
+    --bs-btn-disabled-border-color: var(--nomad-accent);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color: var(--nomad-text);
+    --bs-btn-border-color: var(--nomad-border);
+    --bs-btn-hover-color: var(--nomad-text);
+    --bs-btn-hover-bg: var(--nomad-surface-2);
+    --bs-btn-hover-border-color: var(--nomad-muted);
+    --bs-btn-active-color: var(--nomad-text);
+    --bs-btn-active-bg: var(--nomad-surface-2);
+    --bs-btn-active-border-color: var(--nomad-muted);
+}
+
+.btn:focus-visible, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-select:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem var(--nomad-bg), 0 0 0 0.25rem var(--nomad-focus);
+}
+
+/* Neutral badges (tags, "already filed") would stay light in dark mode. */
+.text-bg-light {
+    color: var(--nomad-text) !important;
+    background-color: var(--nomad-surface-2) !important;
+}

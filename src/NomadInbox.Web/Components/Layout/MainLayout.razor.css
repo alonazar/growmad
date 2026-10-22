@@ -8,13 +8,16 @@ main {
     flex: 1;
 }
 
+/* Colors come from the skin (wwwroot/skins). */
 .sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    background-color: var(--nomad-sidebar-bg-2);
+    background-image: var(--nomad-sidebar-texture), linear-gradient(180deg, var(--nomad-sidebar-bg) 0%, var(--nomad-sidebar-bg-2) 70%);
 }
 
 .top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
+    background-color: var(--nomad-topbar-bg);
+    color: var(--nomad-topbar-text);
+    border-bottom: 1px solid var(--nomad-topbar-border);
     justify-content: flex-end;
     height: 3.5rem;
     display: flex;
@@ -29,6 +32,18 @@ main {
 
     .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
         text-decoration: underline;
+    }
+
+    .top-row .mode-toggle {
+        color: var(--nomad-topbar-text);
+        line-height: 1;
+    }
+
+    .top-row .mode-toggle svg {
+        width: 1.1rem;
+        height: 1.1rem;
+        fill: currentColor;
+        vertical-align: -0.15em;
     }
 
     .top-row ::deep a:first-child {

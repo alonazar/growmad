@@ -1,3 +1,5 @@
+using NomadInbox.Core.Appearance;
+
 namespace NomadInbox.Core.Domain;
 
 /// <summary>
@@ -92,6 +94,11 @@ public class InboxSettings
     public string? PageTemplate { get; set; }
     /// <summary>Custom page stylesheet; empty uses the built-in one.</summary>
     public string? PageStylesheet { get; set; }
+
+    // Appearance of the web app (not of saved pages).
+    /// <summary>A <see cref="SkinCatalog"/> id; unknown ids show the default skin.</summary>
+    public string Skin { get; set; } = SkinCatalog.DefaultId;
+    public ColorMode ColorMode { get; set; } = ColorMode.System;
 
     public bool IsAiConfigured =>
         SummariesEnabled && !string.IsNullOrWhiteSpace(OllamaUrl) && !string.IsNullOrWhiteSpace(OllamaModel);
