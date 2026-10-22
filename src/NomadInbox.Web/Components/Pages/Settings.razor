@@ -531,7 +531,7 @@
         testResult = null;
         try
         {
-            var account = SettingsService.CreateAccount(form!.ApplyTo(Clone(stored)), form.NewPassword);
+            var account = SettingsService.CreateAccount(form!.ApplyTo(await SettingsService.GetAsync()), form.NewPassword);
             testResult = account is null
                 ? new ConnectionTestResult(false, "Enter the server, email address and app password first.")
                 : await MailboxReader.TestConnectionAsync(account, CancellationToken.None);
@@ -548,7 +548,9 @@
         saveMessage = null;
         try
         {
-            stored = form!.ApplyTo(Clone(stored));
+            // Start from what's saved now, so settings this form doesn't show (the saved-page template and stylesheet,
+            // or anything changed elsewhere since the page opened) are kept.
+            stored = form!.ApplyTo(await SettingsService.GetAsync());
             await SettingsService.SaveAsync(stored, form.NewPassword);
             hasSavedPassword = !string.IsNullOrEmpty(stored.ProtectedPassword);
             form.NewPassword = null;
@@ -583,16 +585,6 @@
         form!.AllowedAttachmentKinds = allowed ? form.AllowedAttachmentKinds | kind : form.AllowedAttachmentKinds & ~kind;
         editContext!.NotifyFieldChanged(editContext.Field(nameof(SettingsForm.AllowedAttachmentKinds)));
     }
-
-    private static InboxSettings Clone(InboxSettings s) => new()
-    {
-        Id = s.Id, ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username,
-        ProtectedPassword = s.ProtectedPassword, Folder = s.Folder, SubjectPrefix = s.SubjectPrefix,
-        AllowedSenders = s.AllowedSenders, ImportSince = s.ImportSince,
-        PollingEnabled = s.PollingEnabled, PollIntervalMinutes = s.PollIntervalMinutes,
-        ApplyLabels = s.ApplyLabels, ProcessedLabel = s.ProcessedLabel, FailedLabel = s.FailedLabel,
-        MaxAttachmentMegabytes = s.MaxAttachmentMegabytes,
-    };
 
     private sealed class SettingsForm
     {
