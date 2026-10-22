@@ -1,0 +1,70 @@
+@page "/emails"
+@rendermode InteractiveServer
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+
+<PageTitle>Emails · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-4">Emails</h1>
+
+<div class="row g-2 mb-3">
+    <div class="col-sm-8">
+        <input class="form-control" type="search" placeholder="Search subject, sender or category — or #tag"
+               @bind="Q" @bind:event="oninput" @bind:after="LoadAsync" />
+    </div>
+    <div class="col-sm-4">
+        <select class="form-select" @bind="Status" @bind:after="LoadAsync">
+            <option value="">All statuses</option>
+            @foreach (var s in Enum.GetValues<EmailStatus>())
+            {
+                <option value="@s">@s</option>
+            }
+        </select>
+    </div>
+</div>
+
+<p class="text-muted small">
+    @if (total > emails.Count) { <text>Showing the newest @emails.Count of @total.</text> }
+    else { <text>@total email(s).</text> }
+</p>
+
+<EmailTable Emails="emails" EmptyText="No emails match." />
+
+@code {
+    private const int PageSize = 200;
+
+    [SupplyParameterFromQuery] private string? Q { get; set; }
+    [SupplyParameterFromQuery] private string? Status { get; set; }
+
+    private List<InboxEmail> emails = [];
+    private int total;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.Emails.AsNoTracking();
+
+        if (Enum.TryParse<EmailStatus>(Status, out var status))
+            query = query.Where(e => e.Status == status);
+
+        var term = Q?.Trim();
+        if (term is { Length: > 1 } && term[0] == '#')
+        {
+            var tag = term[1..].ToLowerInvariant();
+            query = query.Where(e => e.Tags.Contains(tag));
+        }
+        else if (!string.IsNullOrEmpty(term))
+        {
+            var like = $"%{term}%";
+            query = query.Where(e =>
+                EF.Functions.Like(e.Subject, like) ||
+                EF.Functions.Like(e.FromAddress, like) ||
+                (e.FromName != null && EF.Functions.Like(e.FromName, like)) ||
+                (e.Category != null && EF.Functions.Like(e.Category, like)));
+        }
+
+        total = await query.CountAsync();
+        emails = await query.OrderByDescending(e => e.ReceivedAt).Take(PageSize).ToListAsync();
+    }
+}

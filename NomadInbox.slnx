@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NomadInbox.Core/NomadInbox.Core.csproj" />
+    <Project Path="src/NomadInbox.Infrastructure/NomadInbox.Infrastructure.csproj" />
+    <Project Path="src/NomadInbox.Web/NomadInbox.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NomadInbox.Tests/NomadInbox.Tests.csproj" />
+  </Folder>
+</Solution>

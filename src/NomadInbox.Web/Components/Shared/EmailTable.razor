@@ -1,0 +1,51 @@
+@if (Emails.Count == 0)
+{
+    <p class="text-muted">@EmptyText</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle email-table">
+            <thead>
+                <tr>
+                    <th>Received</th>
+                    <th>Category</th>
+                    <th>Title</th>
+                    <th>From</th>
+                    <th class="text-center" title="Links / attachments">Content</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var email in Emails)
+                {
+                    <tr>
+                        <td class="text-nowrap" title="@Display.Local(email.ReceivedAt)">@Display.Ago(email.ReceivedAt)</td>
+                        <td><span class="category">@(email.Category ?? "—")</span></td>
+                        <td>
+                            <a href="emails/@email.Id">@(string.IsNullOrWhiteSpace(email.Title) ? "(no title)" : email.Title)</a>
+                            @foreach (var tag in email.Tags)
+                            {
+                                <span class="badge rounded-pill text-bg-light border ms-1">#@tag</span>
+                            }
+                        </td>
+                        <td class="text-truncate from-cell" title="@email.FromAddress">@(email.FromName ?? email.FromAddress)</td>
+                        <td class="text-center text-nowrap small text-muted">
+                            @if (email.ProcessedAt is not null)
+                            {
+                                <span title="Links">🔗 @email.LinkCount</span>
+                                <span class="ms-2" title="Attachments">📎 @email.AttachmentCount</span>
+                            }
+                        </td>
+                        <td><span class="badge @Display.BadgeClass(email.Status)">@email.Status</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InboxEmail> Emails { get; set; } = [];
+    [Parameter] public string EmptyText { get; set; } = "No emails yet.";
+}

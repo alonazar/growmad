@@ -1,0 +1,136 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject PollerStatus Poller
+@inject PollTrigger Trigger
+@inject SettingsService SettingsService
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+@inject ILogger<Home> Logger
+
+<PageTitle>Dashboard · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-4">Dashboard</h1>
+
+@if (settings is { IsMailConfigured: false })
+{
+    <div class="alert alert-info">
+        No mailbox is connected yet. <a href="settings">Open Settings</a> to add your Gmail address and app password.
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h2 class="h5 mb-0">Mail poller</h2>
+                    <span class="badge @state.Css">@state.Label</span>
+                </div>
+                <dl class="row mb-3 small">
+                    <dt class="col-5">Last check</dt>
+                    <dd class="col-7" title="@Display.Local(snapshot.LastRunAt)">@Display.Ago(snapshot.LastRunAt)</dd>
+                    <dt class="col-5">Last success</dt>
+                    <dd class="col-7" title="@Display.Local(snapshot.LastSuccessAt)">@Display.Ago(snapshot.LastSuccessAt)</dd>
+                    <dt class="col-5">Next check</dt>
+                    <dd class="col-7">@(snapshot.NextRunAt is null ? "—" : Display.Ago(snapshot.NextRunAt))</dd>
+                    @if (snapshot.LastOutcome is { } o)
+                    {
+                        <dt class="col-5">Last result</dt>
+                        <dd class="col-7">@o.Added new, @o.Ignored ignored, @o.Duplicates already known</dd>
+                    }
+                    @if (snapshot.LastProcessing is { } p)
+                    {
+                        <dt class="col-5">Processed</dt>
+                        <dd class="col-7">@p.Processed done, @p.Failed failed</dd>
+                    }
+                </dl>
+                @if (snapshot.LastError is not null)
+                {
+                    <div class="alert alert-danger small py-2">@snapshot.LastError</div>
+                }
+                <button class="btn btn-primary btn-sm" @onclick="PollNow"
+                        disabled="@(settings is not { IsMailConfigured: true } || snapshot.State == PollerState.Polling)">
+                    Check mail now
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Emails</h2>
+                <div class="stat-grid">
+                    @foreach (var status in Enum.GetValues<EmailStatus>())
+                    {
+                        <a class="stat" href="emails?status=@status">
+                            <span class="stat-value">@counts.GetValueOrDefault(status)</span>
+                            <span class="stat-label"><span class="badge @Display.BadgeClass(status)">@status</span></span>
+                        </a>
+                    }
+                </div>
+                <p class="small text-muted mt-3 mb-0">
+                    Web links: @linkCounts.GetValueOrDefault(LinkStatus.Done) summarized,
+                    @(linkCounts.GetValueOrDefault(LinkStatus.Pending) + linkCounts.GetValueOrDefault(LinkStatus.Fetched)) waiting,
+                    @linkCounts.GetValueOrDefault(LinkStatus.Failed) failed
+                    @if (linkCounts.GetValueOrDefault(LinkStatus.Fetched) > 0)
+                    {
+                        <text>· @linkCounts[LinkStatus.Fetched] waiting for the AI (<a href="settings">set up summaries</a>)</text>
+                    }
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-baseline">
+    <h2 class="h5">Recent emails</h2>
+    <a href="emails">View all</a>
+</div>
+<EmailTable Emails="recent" EmptyText="Nothing has arrived yet. Send an email whose subject starts with your prefix." />
+
+@code {
+    private InboxSettings? settings;
+    private PollerSnapshot snapshot = default!;
+    private (string Label, string Css) state;
+    private Dictionary<EmailStatus, int> counts = [];
+    private List<InboxEmail> recent = [];
+    private Dictionary<LinkStatus, int> linkCounts = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        TakeSnapshot();
+        Poller.Changed += OnPollerChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        settings = await SettingsService.GetAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        counts = await db.Emails.GroupBy(e => e.Status).ToDictionaryAsync(g => g.Key, g => g.Count());
+        recent = await db.Emails.AsNoTracking().OrderByDescending(e => e.ReceivedAt).Take(10).ToListAsync();
+        linkCounts = await db.Links.Where(l => l.Kind == LinkKind.Web)
+            .GroupBy(l => l.Status).ToDictionaryAsync(g => g.Key, g => g.Count());
+    }
+
+    private void TakeSnapshot()
+    {
+        snapshot = Poller.Current;
+        state = Display.Describe(snapshot.State);
+    }
+
+    private void PollNow()
+    {
+        Logger.LogInformation("Check mail now clicked");
+        Trigger.Signal(PollTriggerReason.PollNow);
+    }
+
+    private void OnPollerChanged() => _ = InvokeAsync(async () =>
+    {
+        TakeSnapshot();
+        if (snapshot.State != PollerState.Polling) await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Poller.Changed -= OnPollerChanged;
+}

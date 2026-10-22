@@ -1,0 +1,505 @@
+@page "/settings"
+@* No prerendering: the form only appears once the live connection is up, so Save can never fall back to a plain page post (which the server rejects). *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using NomadInbox.Core.Mail
+@inject SettingsService SettingsService
+@inject IMailboxReader MailboxReader
+@inject MailIngestService Ingest
+@inject NomadInbox.Infrastructure.Ai.OllamaClient Ollama
+@using NomadInbox.Infrastructure.Ai
+
+<PageTitle>Settings · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-4">Settings</h1>
+
+@if (form is null)
+{
+    <p class="text-muted">Connecting… If this doesn't go away, reload the page.</p>
+    return;
+}
+
+<EditForm EditContext="editContext" OnValidSubmit="SaveAsync" OnInvalidSubmit="() => saveMessage = null">
+    <DataAnnotationsValidator />
+
+    <div class="row g-4">
+        <div class="col-xl-7">
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">Gmail account (IMAP)</h2>
+                    <p class="text-muted small">
+                        Use a dedicated Gmail account. Turn on 2-Step Verification, then create an app password at
+                        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>.
+                        Your normal Google password will not work.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label" for="host">IMAP server</label>
+                            <InputText id="host" class="form-control" @bind-Value="form.ImapHost" />
+                            <ValidationMessage For="() => form.ImapHost" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="port">Port</label>
+                            <InputNumber id="port" class="form-control" @bind-Value="form.ImapPort" />
+                            <ValidationMessage For="() => form.ImapPort" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="user">Email address</label>
+                            <InputText id="user" class="form-control" @bind-Value="form.Username" autocomplete="off" />
+                            <ValidationMessage For="() => form.Username" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="pass">App password</label>
+                            <InputText id="pass" type="password" class="form-control" @bind-Value="form.NewPassword"
+                                       autocomplete="new-password"
+                                       placeholder="@(hasSavedPassword ? "Saved. Type to replace it" : "16 characters, spaces optional")" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="folder">Folder</label>
+                            <InputText id="folder" class="form-control" @bind-Value="form.Folder" />
+                            <ValidationMessage For="() => form.Folder" />
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="TestAsync" disabled="@testing">
+                            @(testing ? "Testing…" : "Test connection")
+                        </button>
+                        @if (testResult is not null)
+                        {
+                            <span class="small @(testResult.Success ? "text-success" : "text-danger")">@testResult.Message</span>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">Polling</h2>
+                    <div class="form-check form-switch mb-3">
+                        <InputCheckbox id="enabled" class="form-check-input" @bind-Value="form.PollingEnabled" />
+                        <label class="form-check-label" for="enabled">Check for new mail automatically</label>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="interval">Every (minutes)</label>
+                            <InputNumber id="interval" class="form-control" @bind-Value="form.PollIntervalMinutes" />
+                            <ValidationMessage For="() => form.PollIntervalMinutes" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="since">On first scan, skip mail before</label>
+                            <InputDate id="since" class="form-control" @bind-Value="form.ImportSince" />
+                            <div class="form-text">Leave empty to scan the whole folder.</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 small">
+                        <button type="button" class="btn btn-link btn-sm p-0" @onclick="ResetCursorAsync">Rescan the folder from the start</button>
+                        <div class="text-muted">Use this after changing the prefix. Emails already recorded are skipped.</div>
+                        @if (resetMessage is not null) { <div class="text-success">@resetMessage</div> }
+                    </div>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">AI summaries (NOMAD's Ollama)</h2>
+                    <p class="text-muted small">
+                        Web links are fetched and their readable text is extracted either way. Summaries need NOMAD's
+                        AI Assistant installed and a model downloaded in the Command Center.
+                    </p>
+                    <div class="form-check form-switch mb-3">
+                        <InputCheckbox id="ai" class="form-check-input" @bind-Value="form.SummariesEnabled" />
+                        <label class="form-check-label" for="ai">Summarize web links</label>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="ollama">Ollama address</label>
+                            <InputText id="ollama" class="form-control" @bind-Value="form.OllamaUrl" disabled="@(!form.SummariesEnabled)" />
+                            <div class="form-text">From the container, NOMAD's Ollama is at <code>http://host.docker.internal:11434</code>.</div>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="ctx">Context size (tokens)</label>
+                            <InputNumber id="ctx" class="form-control" @bind-Value="form.OllamaContextTokens" disabled="@(!form.SummariesEnabled)" />
+                            <ValidationMessage For="() => form.OllamaContextTokens" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label" for="model">Model</label>
+                            <div class="input-group">
+                                <InputText id="model" class="form-control" list="ollama-models" @bind-Value="form.OllamaModel"
+                                           placeholder="e.g. gemma3:12b" disabled="@(!form.SummariesEnabled)" />
+                                <button type="button" class="btn btn-outline-secondary" @onclick="LoadModelsAsync"
+                                        disabled="@(!form.SummariesEnabled || loadingModels)">@(loadingModels ? "Loading…" : "Load models")</button>
+                            </div>
+                            <datalist id="ollama-models">
+                                @foreach (var m in models)
+                                {
+                                    <option value="@m.Name">@m.Name @(m.ParameterSize is null ? "" : $"({m.ParameterSize})")</option>
+                                }
+                            </datalist>
+                            @if (modelsMessage is not null) { <div class="form-text">@modelsMessage</div> }
+                        </div>
+                        <div class="col-md-5 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-secondary" @onclick="TestAiAsync"
+                                    disabled="@(!form.SummariesEnabled || testingAi)">@(testingAi ? "Asking the model…" : "Test the model")</button>
+                        </div>
+                    </div>
+                    @if (aiTestResult is not null)
+                    {
+                        <div class="small mt-2 @(aiTestOk ? "text-success" : "text-danger")">@aiTestResult</div>
+                    }
+                    <details class="mt-3">
+                        <summary class="small">Summary instructions (advanced)</summary>
+                        <InputTextArea class="form-control form-control-sm mt-2 font-monospace" rows="8" @bind-Value="form.SummaryPrompt"
+                                       placeholder="@Summarizer.DefaultPrompt" />
+                        <div class="form-text">Leave empty to use the built-in instructions shown as the placeholder.</div>
+                    </details>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">YouTube</h2>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="langs">Transcript languages</label>
+                            <InputText id="langs" class="form-control" @bind-Value="form.TranscriptLanguages" placeholder="en" />
+                            <div class="form-text">Preferred caption languages, most preferred first (e.g. <code>en, de</code>). The video's original-language captions are used when none match.</div>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="followHours">Check followed channels every (hours)</label>
+                            <InputNumber id="followHours" class="form-control" @bind-Value="form.FollowCheckHours" />
+                            <ValidationMessage For="() => form.FollowCheckHours" />
+                        </div>
+                    </div>
+                    <h3 class="h6 mt-4">Save videos for offline viewing</h3>
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label" for="dlMode">Download videos</label>
+                            <InputSelect id="dlMode" class="form-select" @bind-Value="form.VideoDownloadMode">
+                                <option value="@VideoDownloadMode.Never">Never</option>
+                                <option value="@VideoDownloadMode.Tagged">Only for emails tagged #download</option>
+                                <option value="@VideoDownloadMode.Always">Always</option>
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="dlHeight">Max quality</label>
+                            <InputSelect id="dlHeight" class="form-select" @bind-Value="form.MaxVideoHeight">
+                                <option value="360">360p</option>
+                                <option value="480">480p</option>
+                                <option value="720">720p</option>
+                                <option value="1080">1080p</option>
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="dlSize">Max size per video (MB)</label>
+                            <InputNumber id="dlSize" class="form-control" @bind-Value="form.MaxVideoMegabytes" />
+                            <ValidationMessage For="() => form.MaxVideoMegabytes" />
+                        </div>
+                    </div>
+                    <div class="form-text">
+                        Videos go to NOMAD's shared media folder (<code>media/youtube</code>), so Jellyfin and File Browser can see them.
+                        Roughly 10–20 MB per minute at 720p. A channel followed from a <code>#download</code> email downloads its new videos too.
+                    </div>
+
+                    <div class="form-text mt-3">
+                        yt-dlp @(NomadInbox.Infrastructure.YouTube.YtDlpMaintenance.Version ?? "(version not known yet)"); it updates itself daily.
+                        Manage followed channels on the <a href="channels">Channels</a> page.
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-xl-5">
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">Filtering</h2>
+                    <div class="mb-3">
+                        <label class="form-label" for="prefix">Subject prefix</label>
+                        <InputText id="prefix" class="form-control" @bind-Value="form.SubjectPrefix" />
+                        <ValidationMessage For="() => form.SubjectPrefix" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="senders">Allowed senders</label>
+                        <InputTextArea id="senders" class="form-control font-monospace" rows="4" @bind-Value="form.AllowedSenders"
+                                       placeholder="@SendersPlaceholder" />
+                        <div class="form-text">
+                            One address or <code>@@domain</code> per line. Mail from anyone else is recorded as <em>Ignored</em> and never processed.
+                            @if (string.IsNullOrWhiteSpace(form.AllowedSenders))
+                            {
+                                <span class="text-warning-emphasis">Empty means anyone who knows the address can submit content.</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">Processing</h2>
+                    <div class="form-check form-switch mb-2">
+                        <InputCheckbox id="labels" class="form-check-input" @bind-Value="form.ApplyLabels" />
+                        <label class="form-check-label" for="labels">Label processed mail in Gmail</label>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label class="form-label" for="okLabel">Processed label</label>
+                            <InputText id="okLabel" class="form-control" @bind-Value="form.ProcessedLabel" disabled="@(!form.ApplyLabels)" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="failLabel">Failed label</label>
+                            <InputText id="failLabel" class="form-control" @bind-Value="form.FailedLabel" disabled="@(!form.ApplyLabels)" />
+                        </div>
+                    </div>
+                    <div class="form-text mb-3">Gmail creates the labels on first use. A <code>/</code> nests them, so both appear under "NOMAD".</div>
+                    <label class="form-label" for="maxMb">Largest attachment to store (MB)</label>
+                    <InputNumber id="maxMb" class="form-control" @bind-Value="form.MaxAttachmentMegabytes" />
+                    <ValidationMessage For="() => form.MaxAttachmentMegabytes" />
+                    <div class="form-text">Bigger files are listed on the email but not saved.</div>
+                    <div class="form-check form-switch mt-3">
+                        <InputCheckbox id="private" class="form-check-input" @bind-Value="form.AllowPrivateNetworkLinks" />
+                        <label class="form-check-label" for="private">Allow links to local-network addresses</label>
+                    </div>
+                    <div class="form-text">Off by default, so an emailed link can't make NOMAD Inbox read pages from your own network (NOMAD itself, your router, …).</div>
+                    <div class="form-check form-switch mt-3">
+                        <InputCheckbox id="render" class="form-check-input" @bind-Value="form.RenderJavaScriptPages" />
+                        <label class="form-check-label" for="render">Render JavaScript pages in a headless browser</label>
+                    </div>
+                    <div class="form-text">Used only when a page has almost no text without JavaScript (single-page and WebAssembly apps). Slower, up to about a minute per page.</div>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">Subject syntax</h2>
+                    <p class="small text-muted mb-2">
+                        <code>@form.SubjectPrefix Category/Sub #tag key=value Title words</code>. A single-level category needs a trailing slash (<code>Survival/</code>) or <code>cat=Survival</code>; quote names with spaces (<code>"Medical/First Aid"</code>).
+                    </p>
+                    <input class="form-control form-control-sm mb-2" @bind="sample" @bind:event="oninput" />
+                    @if (SubjectParser.Parse(sample, form.SubjectPrefix) is { } parsed)
+                    {
+                        <dl class="row small mb-0">
+                            <dt class="col-4">Category</dt><dd class="col-8">@(parsed.Category ?? "—")</dd>
+                            <dt class="col-4">Tags</dt><dd class="col-8">@(parsed.Tags.Count == 0 ? "—" : string.Join(", ", parsed.Tags))</dd>
+                            <dt class="col-4">Fields</dt><dd class="col-8">@(parsed.Fields.Count == 0 ? "—" : string.Join(", ", parsed.Fields.Select(kv => $"{kv.Key}={kv.Value}")))</dd>
+                            <dt class="col-4">Title</dt><dd class="col-8">@(parsed.Title.Length == 0 ? "—" : parsed.Title)</dd>
+                        </dl>
+                    }
+                    else
+                    {
+                        <p class="small text-danger mb-0">Doesn't start with the prefix, so it would be skipped.</p>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <ValidationSummary class="text-danger small mb-2" />
+    <div class="save-bar d-flex align-items-center gap-3 mb-4">
+        <button type="submit" class="btn btn-primary" disabled="@saving">@(saving ? "Saving…" : "Save settings")</button>
+        @if (dirty) { <span class="text-warning-emphasis fw-semibold">Unsaved changes. Nothing takes effect until you save.</span> }
+        else if (saveMessage is not null) { <span class="text-success">@saveMessage</span> }
+    </div>
+</EditForm>
+
+@code {
+    private const string SendersPlaceholder = "you@gmail.com\n@yourfamily.org";
+
+    private InboxSettings stored = new();
+    private SettingsForm? form;
+    private EditContext? editContext;
+    private bool dirty;
+    private bool hasSavedPassword;
+    private bool testing, saving;
+    private ConnectionTestResult? testResult;
+    private string? saveMessage, resetMessage;
+    private string sample = "NOMAD: Survival/Water #filtration #diy priority=high Ceramic filter builds";
+    private IReadOnlyList<OllamaModel> models = [];
+    private bool loadingModels, testingAi, aiTestOk;
+    private string? modelsMessage, aiTestResult;
+
+    private async Task LoadModelsAsync()
+    {
+        loadingModels = true;
+        modelsMessage = null;
+        try
+        {
+            models = await Ollama.ListModelsAsync(form!.OllamaUrl ?? "", CancellationToken.None);
+            modelsMessage = models.Count == 0
+                ? "Ollama is running but has no models yet. Download one in NOMAD's AI Assistant settings."
+                : $"{models.Count} model(s) installed: {string.Join(", ", models.Select(m => m.Name))}";
+        }
+        catch (OllamaException ex)
+        {
+            models = [];
+            modelsMessage = ex.Message + " Is NOMAD's AI Assistant installed?";
+        }
+        finally
+        {
+            loadingModels = false;
+        }
+    }
+
+    private async Task TestAiAsync()
+    {
+        testingAi = true;
+        aiTestResult = null;
+        var started = DateTime.UtcNow;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(form!.OllamaModel))
+                throw new OllamaException("Choose a model first.");
+            var reply = await Ollama.ChatAsync(form.OllamaUrl ?? "", form.OllamaModel.Trim(),
+                "You are a test. Answer with one short sentence.", "Say that the connection works.",
+                Math.Clamp(form.OllamaContextTokens, 2048, 131072), CancellationToken.None);
+            aiTestOk = true;
+            aiTestResult = $"{form.OllamaModel} answered in {(DateTime.UtcNow - started).TotalSeconds:0.0}s: \"{reply}\"" +
+                (dirty ? " Now click Save settings to use it." : "");
+        }
+        catch (OllamaException ex)
+        {
+            aiTestOk = false;
+            aiTestResult = ex.Message;
+        }
+        finally
+        {
+            testingAi = false;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        stored = await SettingsService.GetAsync();
+        form = SettingsForm.From(stored);
+        editContext = new EditContext(form);
+        // Field edits only re-render the input itself, so refresh the page to show the warning next to Save.
+        editContext.OnFieldChanged += (_, _) => { dirty = true; StateHasChanged(); };
+        hasSavedPassword = !string.IsNullOrEmpty(stored.ProtectedPassword);
+    }
+
+    private async Task TestAsync()
+    {
+        testing = true;
+        testResult = null;
+        try
+        {
+            var account = SettingsService.CreateAccount(form!.ApplyTo(Clone(stored)), form.NewPassword);
+            testResult = account is null
+                ? new ConnectionTestResult(false, "Enter the server, email address and app password first.")
+                : await MailboxReader.TestConnectionAsync(account, CancellationToken.None);
+        }
+        finally
+        {
+            testing = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        saveMessage = null;
+        try
+        {
+            stored = form!.ApplyTo(Clone(stored));
+            await SettingsService.SaveAsync(stored, form.NewPassword);
+            hasSavedPassword = !string.IsNullOrEmpty(stored.ProtectedPassword);
+            form.NewPassword = null;
+            saveMessage = $"Saved at {DateTime.Now:HH:mm:ss}.";
+            dirty = false;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task ResetCursorAsync()
+    {
+        await Ingest.ResetCursorAsync(stored.Folder, CancellationToken.None);
+        resetMessage = $"The next check rescans \"{stored.Folder}\".";
+    }
+
+    private static InboxSettings Clone(InboxSettings s) => new()
+    {
+        Id = s.Id, ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username,
+        ProtectedPassword = s.ProtectedPassword, Folder = s.Folder, SubjectPrefix = s.SubjectPrefix,
+        AllowedSenders = s.AllowedSenders, ImportSince = s.ImportSince,
+        PollingEnabled = s.PollingEnabled, PollIntervalMinutes = s.PollIntervalMinutes,
+        ApplyLabels = s.ApplyLabels, ProcessedLabel = s.ProcessedLabel, FailedLabel = s.FailedLabel,
+        MaxAttachmentMegabytes = s.MaxAttachmentMegabytes,
+    };
+
+    private sealed class SettingsForm
+    {
+        [Required] public string ImapHost { get; set; } = "";
+        [Range(1, 65535)] public int ImapPort { get; set; }
+        [Required, Display(Name = "Email address")] public string Username { get; set; } = "";
+        public string? NewPassword { get; set; }
+        [Required] public string Folder { get; set; } = "";
+        [Required, Display(Name = "Subject prefix")] public string SubjectPrefix { get; set; } = "";
+        public string? AllowedSenders { get; set; }
+        public DateTime? ImportSince { get; set; }
+        public bool PollingEnabled { get; set; }
+        [Range(1, 1440, ErrorMessage = "Choose between 1 and 1440 minutes.")] public int PollIntervalMinutes { get; set; }
+        public bool ApplyLabels { get; set; }
+        public string? ProcessedLabel { get; set; }
+        public string? FailedLabel { get; set; }
+        [Range(1, 1024, ErrorMessage = "Choose between 1 and 1024 MB.")] public int MaxAttachmentMegabytes { get; set; }
+        public bool AllowPrivateNetworkLinks { get; set; }
+        public bool RenderJavaScriptPages { get; set; }
+        public string? TranscriptLanguages { get; set; }
+        [Range(1, 168, ErrorMessage = "Choose between 1 and 168 hours.")] public int FollowCheckHours { get; set; }
+        public VideoDownloadMode VideoDownloadMode { get; set; }
+        public int MaxVideoHeight { get; set; }
+        [Range(10, 100000, ErrorMessage = "Choose between 10 and 100000 MB.")] public int MaxVideoMegabytes { get; set; }
+        public bool SummariesEnabled { get; set; }
+        public string? OllamaUrl { get; set; }
+        public string? OllamaModel { get; set; }
+        [Range(2048, 131072, ErrorMessage = "Choose between 2048 and 131072 tokens.")] public int OllamaContextTokens { get; set; }
+        public string? SummaryPrompt { get; set; }
+
+        public static SettingsForm From(InboxSettings s) => new()
+        {
+            AllowPrivateNetworkLinks = s.AllowPrivateNetworkLinks, RenderJavaScriptPages = s.RenderJavaScriptPages,
+            TranscriptLanguages = s.TranscriptLanguages, FollowCheckHours = s.FollowCheckHours,
+            VideoDownloadMode = s.VideoDownloadMode, MaxVideoHeight = s.MaxVideoHeight, MaxVideoMegabytes = s.MaxVideoMegabytes,
+            SummariesEnabled = s.SummariesEnabled,
+            OllamaUrl = s.OllamaUrl, OllamaModel = s.OllamaModel, OllamaContextTokens = s.OllamaContextTokens,
+            SummaryPrompt = s.SummaryPrompt,
+            ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username, Folder = s.Folder,
+            SubjectPrefix = s.SubjectPrefix, AllowedSenders = s.AllowedSenders,
+            ImportSince = s.ImportSince?.LocalDateTime.Date,
+            PollingEnabled = s.PollingEnabled, PollIntervalMinutes = s.PollIntervalMinutes,
+            ApplyLabels = s.ApplyLabels, ProcessedLabel = s.ProcessedLabel, FailedLabel = s.FailedLabel,
+            MaxAttachmentMegabytes = s.MaxAttachmentMegabytes,
+        };
+
+        public InboxSettings ApplyTo(InboxSettings s)
+        {
+            s.ImapHost = ImapHost.Trim();
+            s.ImapPort = ImapPort;
+            s.Username = Username.Trim();
+            s.Folder = Folder.Trim();
+            s.SubjectPrefix = SubjectPrefix.Trim();
+            s.AllowedSenders = AllowedSenders ?? "";
+            s.ImportSince = ImportSince is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d.Date, DateTimeKind.Local)) : null;
+            s.PollingEnabled = PollingEnabled;
+            s.PollIntervalMinutes = PollIntervalMinutes;
+            s.ApplyLabels = ApplyLabels;
+            s.ProcessedLabel = string.IsNullOrWhiteSpace(ProcessedLabel) ? "NOMAD/Processed" : ProcessedLabel.Trim();
+            s.FailedLabel = string.IsNullOrWhiteSpace(FailedLabel) ? "NOMAD/Failed" : FailedLabel.Trim();
+            s.MaxAttachmentMegabytes = MaxAttachmentMegabytes;
+            s.AllowPrivateNetworkLinks = AllowPrivateNetworkLinks;
+            s.RenderJavaScriptPages = RenderJavaScriptPages;
+            s.TranscriptLanguages = string.IsNullOrWhiteSpace(TranscriptLanguages) ? "en" : TranscriptLanguages.Trim();
+            s.FollowCheckHours = FollowCheckHours;
+            s.VideoDownloadMode = VideoDownloadMode;
+            s.MaxVideoHeight = MaxVideoHeight;
+            s.MaxVideoMegabytes = MaxVideoMegabytes;
+            s.SummariesEnabled = SummariesEnabled;
+            s.OllamaUrl = string.IsNullOrWhiteSpace(OllamaUrl) ? "http://host.docker.internal:11434" : OllamaUrl.Trim().TrimEnd('/');
+            s.OllamaModel = OllamaModel?.Trim() ?? "";
+            s.OllamaContextTokens = OllamaContextTokens;
+            s.SummaryPrompt = string.IsNullOrWhiteSpace(SummaryPrompt) ? null : SummaryPrompt.Trim();
+            return s;
+        }
+    }
+}

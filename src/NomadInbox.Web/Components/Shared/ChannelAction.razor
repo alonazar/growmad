@@ -1,0 +1,14 @@
+@* A POST form for followed-channel actions on the Channels page. *@
+<form method="post" action="channels/@ChannelId/@Mode" class="d-inline"
+      onsubmit="@(Confirm is null ? null : $"return confirm({System.Text.Json.JsonSerializer.Serialize(Confirm)})")">
+    <AntiforgeryToken />
+    <button type="submit" class="btn btn-link btn-sm p-0 ms-2">@Label</button>
+</form>
+
+@code {
+    [Parameter, EditorRequired] public int ChannelId { get; set; }
+    /// <summary>"check", "toggle" or "delete".</summary>
+    [Parameter, EditorRequired] public string Mode { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Confirm { get; set; }
+}

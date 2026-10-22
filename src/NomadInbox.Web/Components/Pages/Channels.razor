@@ -1,0 +1,70 @@
+@page "/channels"
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+@inject SettingsService SettingsService
+
+<PageTitle>Channels · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-2">Followed channels</h1>
+<p class="text-muted">
+    New uploads are checked every @intervalHours hours and summarized like any other link, filed under the category and
+    tags of the email that started the follow. To follow a channel, use <strong>Follow channel</strong> on a YouTube
+    link, or tag the email <code>#follow</code>. Only videos published after you follow are picked up.
+</p>
+
+@if (channels.Count == 0)
+{
+    <p class="text-muted">You're not following any channels yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr><th>Channel</th><th>Filed under</th><th>Last check</th><th class="text-center">Videos found</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var c in channels)
+                {
+                    <tr class="@(c.Enabled ? "" : "text-muted")">
+                        <td>
+                            <a href="@c.Url" target="_blank" rel="noopener noreferrer" class="fw-semibold">@c.Name</a>
+                            @if (!c.Enabled) { <span class="badge text-bg-secondary ms-1">Paused</span> }
+                            <div class="small text-muted">Following since @c.FollowedAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
+                            @if (c.LastError is not null) { <div class="small text-danger">@c.LastError</div> }
+                        </td>
+                        <td>
+                            <span class="category">@(c.Category ?? "—")</span>
+                            @foreach (var tag in c.Tags) { <span class="badge rounded-pill text-bg-light border ms-1">#@tag</span> }
+                        </td>
+                        <td class="text-nowrap" title="@Display.Local(c.LastCheckedAt)">@Display.Ago(c.LastCheckedAt)</td>
+                        <td class="text-center">@c.VideosFound</td>
+                        <td class="text-nowrap text-end">
+                            <ChannelAction ChannelId="c.Id" Mode="check" Label="Check now" />
+                            <ChannelAction ChannelId="c.Id" Mode="toggle" Label="@(c.Enabled ? "Pause" : "Resume")" />
+                            <ChannelAction ChannelId="c.Id" Mode="delete" Label="Unfollow" Confirm="@($"Stop following {c.Name}? Videos already filed are kept.")" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (Message is not null)
+{
+    <div class="alert alert-info py-2">@Message</div>
+}
+
+@code {
+    [SupplyParameterFromQuery] private string? Message { get; set; }
+
+    private List<FollowedChannel> channels = [];
+    private int intervalHours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        intervalHours = (await SettingsService.GetAsync()).FollowCheckHours;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        channels = await db.FollowedChannels.AsNoTracking().OrderBy(c => c.Name).ToListAsync();
+    }
+}

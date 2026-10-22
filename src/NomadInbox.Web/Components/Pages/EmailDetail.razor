@@ -1,0 +1,321 @@
+@page "/emails/{Id:int}"
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+
+@if (email is null)
+{
+    <PageTitle>Not found · NOMAD Inbox</PageTitle>
+    <p>That email does not exist. <a href="emails">Back to emails</a></p>
+    return;
+}
+
+<PageTitle>@(email.Title is { Length: > 0 } ? email.Title : "Email") · NOMAD Inbox</PageTitle>
+
+<p class="mb-2"><a href="emails">&larr; Emails</a></p>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="h3 mb-0">@(string.IsNullOrWhiteSpace(email.Title) ? "(no title)" : email.Title)</h1>
+    <span class="badge @Display.BadgeClass(email.Status)">@email.Status</span>
+    @if (email.Source == ItemSource.FollowedChannel)
+    {
+        <span class="badge text-bg-danger">New video from a followed channel</span>
+        <a class="small ms-auto" href="channels">Followed channels</a>
+    }
+    else if (email.Status is EmailStatus.Done or EmailStatus.Failed or EmailStatus.Ignored)
+    {
+        <form method="post" action="emails/@email.Id/reprocess" class="ms-auto">
+            <AntiforgeryToken />
+            <button type="submit" class="btn btn-outline-secondary btn-sm"
+                    title="@(email.Status == EmailStatus.Ignored ? "Process it anyway, even though the sender isn't on the allowlist" : "Fetch the message again and redo links and attachments")">
+                @(email.Status == EmailStatus.Ignored ? "Process anyway" : "Reprocess")
+            </button>
+        </form>
+    }
+</div>
+
+@if (email.StatusReason is not null)
+{
+    <div class="alert @(email.Status == EmailStatus.Failed ? "alert-danger" : "alert-secondary") py-2">@email.StatusReason</div>
+}
+
+<div class="row g-3">
+    <div class="col-xl-7">
+        <section class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6 text-uppercase text-muted mb-3">Links (@email.Links.Count)</h2>
+                @if (email.Links.Count == 0)
+                {
+                    <p class="text-muted mb-0">@(email.ProcessedAt is null ? "Not processed yet." : "No links found.")</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0 link-list">
+                        @foreach (var link in email.Links.OrderBy(l => l.Position))
+                        {
+                            <li>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <span class="badge @KindBadge(link.Kind)">@KindLabel(link.Kind)</span>
+                                    <span class="badge @LinkStatusBadge(link)">@LinkStatusLabel(link)</span>
+                                    @if (link.Status is LinkStatus.Failed or LinkStatus.Skipped)
+                                    {
+                                        <LinkAction LinkId="link.Id" Mode="refetch" Label="Retry" />
+                                    }
+                                    else if (link.Status is LinkStatus.Fetched or LinkStatus.Done)
+                                    {
+                                        @if (link.Status == LinkStatus.Done)
+                                        {
+                                            <LinkAction LinkId="link.Id" Mode="resummarize" Label="Summarize again" />
+                                        }
+                                        <LinkAction LinkId="link.Id" Mode="refetch" Label="Fetch again" />
+                                    }
+                                    @if (link.Kind is LinkKind.YouTubeChannel or LinkKind.YouTubeVideo && link.AuthorId is { } channelId)
+                                    {
+                                        @if (followed.Contains(channelId))
+                                        {
+                                            <a class="badge text-bg-light border text-decoration-none" href="channels">✓ Following @(link.Kind == LinkKind.YouTubeVideo ? "this channel" : "")</a>
+                                        }
+                                        else
+                                        {
+                                            <LinkAction LinkId="link.Id" Mode="follow" Label="Follow channel" />
+                                        }
+                                    }
+                                </div>
+                                @if (link.Title is not null)
+                                {
+                                    <div class="fw-semibold mt-1">@link.Title <span class="text-muted fw-normal small">· @link.SiteName</span></div>
+                                }
+                                @if (link.Kind != LinkKind.Web && link.FetchedAt is not null)
+                                {
+                                    <div class="small text-muted">
+                                        @if (link.Author is not null && link.Kind != LinkKind.YouTubeChannel)
+                                        {
+                                            @if (link.AuthorUrl is not null) { <a href="@link.AuthorUrl" target="_blank" rel="noopener noreferrer">@link.Author</a> } else { @link.Author }
+                                            <text> · </text>
+                                        }
+                                        @if (link.DurationSeconds is { } secs) { <text>@NomadInbox.Infrastructure.YouTube.VttTranscript.Stamp(secs) · </text> }
+                                        @if (link.PublishedAt is { } published) { <text>@published.ToLocalTime().ToString("yyyy-MM-dd") · </text> }
+                                        @link.ContentSource
+                                    </div>
+                                }
+                                <a href="@link.Url" target="_blank" rel="noopener noreferrer" class="small text-break">@link.Url</a>
+                                @if (link.Error is not null)
+                                {
+                                    <div class="small @(link.Status == LinkStatus.Failed ? "text-danger" : "text-warning-emphasis")">@link.Error</div>
+                                }
+                                @if (link.Summary is not null)
+                                {
+                                    <div class="summary mt-2">@Markdown.Render(link.Summary)</div>
+                                    <div class="form-text">Summarized by @link.SummaryModel, @Display.Local(link.SummarizedAt)</div>
+                                }
+                                @if (link.Kind == LinkKind.YouTubeVideo)
+                                {
+                                    <div class="small mt-1">
+                                        @switch (link.VideoStatus)
+                                        {
+                                            case VideoStatus.Downloaded:
+                                                <video class="saved-video mt-1" controls preload="metadata" src="videos/@link.Id"></video>
+                                                <div class="text-muted">
+                                                    Saved for offline viewing (@Display.Size(link.VideoBytes ?? 0)):
+                                                    <code>media/youtube/@link.VideoPath</code>
+                                                </div>
+                                                break;
+                                            case VideoStatus.Queued:
+                                                <span class="text-muted">Video download queued…</span>
+                                                break;
+                                            default:
+                                                @if (link.VideoError is not null)
+                                                {
+                                                    <span class="text-warning-emphasis">@link.VideoError</span>
+                                                }
+                                                <LinkAction LinkId="link.Id" Mode="download"
+                                                            Label="@(link.VideoStatus == VideoStatus.None ? "Download video" : "Try downloading again")" />
+                                                break;
+                                        }
+                                    </div>
+                                }
+                                @if (link.Chapters is { } chapters)
+                                {
+                                    <details class="small mt-1">
+                                        <summary>Chapters</summary>
+                                        <pre class="extracted">@chapters</pre>
+                                    </details>
+                                }
+                                @if (link.Kind != LinkKind.Web && link.Description is { Length: > 0 } description)
+                                {
+                                    <details class="small mt-1">
+                                        <summary>Description</summary>
+                                        <pre class="extracted">@Preview(description)</pre>
+                                    </details>
+                                }
+                                @if (link.ContentText is { Length: > 0 } text)
+                                {
+                                    <details class="small mt-1">
+                                        <summary>@ContentLabel(link) (@text.Length.ToString("N0") characters)</summary>
+                                        <pre class="extracted">@Preview(text)</pre>
+                                    </details>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+
+        <section class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6 text-uppercase text-muted mb-3">Attachments (@email.Attachments.Count)</h2>
+                @if (email.Attachments.Count == 0)
+                {
+                    <p class="text-muted mb-0">@(email.ProcessedAt is null ? "Not processed yet." : "No attachments.")</p>
+                }
+                @foreach (var file in email.Attachments.OrderBy(a => a.Id))
+                {
+                    <div class="attachment">
+                        <div class="d-flex flex-wrap align-items-baseline gap-2">
+                            @if (file.StoredPath is not null)
+                            {
+                                <a href="attachments/@file.Id" class="fw-semibold text-break">@file.FileName</a>
+                            }
+                            else
+                            {
+                                <span class="fw-semibold text-break">@file.FileName</span>
+                            }
+                            <span class="text-muted small">@Display.Size(file.SizeBytes) · @file.ContentType</span>
+                            @if (file.IsDuplicate) { <span class="badge text-bg-light border">already filed</span> }
+                        </div>
+                        @if (file.StoredPath is not null)
+                        {
+                            <div class="small text-muted"><code>files/@file.StoredPath</code></div>
+                        }
+                        @if (file.Note is not null)
+                        {
+                            <div class="small text-warning-emphasis">@file.Note</div>
+                        }
+                        @if (file.ExtractedText is { Length: > 0 } text)
+                        {
+                            <details class="small mt-1">
+                                <summary>Extracted text (@text.Length.ToString("N0") characters)</summary>
+                                <pre class="extracted">@Preview(text)</pre>
+                            </details>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6 text-uppercase text-muted mb-3">Message text</h2>
+                @if (string.IsNullOrWhiteSpace(email.BodyText))
+                {
+                    <p class="text-muted mb-0">@(email.ProcessedAt is null ? "Not processed yet." : "The message has no text.")</p>
+                }
+                else
+                {
+                    <pre class="body-text mb-0">@email.BodyText</pre>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div class="col-xl-5">
+        <section class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6 text-uppercase text-muted mb-3">Indexing (from subject)</h2>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Category</dt>
+                    <dd class="col-sm-8"><span class="category">@(email.Category ?? "—")</span></dd>
+                    <dt class="col-sm-4">Tags</dt>
+                    <dd class="col-sm-8">
+                        @if (email.Tags.Count == 0) { <text>—</text> }
+                        @foreach (var tag in email.Tags)
+                        {
+                            <a class="badge rounded-pill text-bg-light border me-1" href="emails?q=%23@tag">#@tag</a>
+                        }
+                    </dd>
+                    <dt class="col-sm-4">Fields</dt>
+                    <dd class="col-sm-8">
+                        @if (email.Fields.Count == 0) { <text>—</text> }
+                        @foreach (var (key, value) in email.Fields)
+                        {
+                            <div><code>@key</code> = @value</div>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </section>
+
+        <section class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6 text-uppercase text-muted mb-3">Message</h2>
+                <dl class="row mb-0 small">
+                    <dt class="col-4">Subject</dt>
+                    <dd class="col-8 text-break">@email.Subject</dd>
+                    <dt class="col-4">From</dt>
+                    <dd class="col-8 text-break">@(email.FromName is null ? email.FromAddress : $"{email.FromName} <{email.FromAddress}>")</dd>
+                    <dt class="col-4">Received</dt>
+                    <dd class="col-8">@Display.Local(email.ReceivedAt)</dd>
+                    <dt class="col-4">Processed</dt>
+                    <dd class="col-8">@Display.Local(email.ProcessedAt) @(email.Attempts > 1 ? $"({email.Attempts} attempts)" : "")</dd>
+                    <dt class="col-4">Folder / UID</dt>
+                    <dd class="col-8">@email.Folder / @email.ImapUid</dd>
+                    <dt class="col-4">Message-ID</dt>
+                    <dd class="col-8 text-break"><code>@email.MessageId</code></dd>
+                </dl>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private InboxEmail? email;
+    private HashSet<string> followed = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        email = await db.Emails.AsNoTracking()
+            .Include(e => e.Links)
+            .Include(e => e.Attachments)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(e => e.Id == Id);
+        followed = (await db.FollowedChannels.Where(c => c.Enabled).Select(c => c.ChannelId).ToListAsync()).ToHashSet();
+    }
+
+    private static string Preview(string text) => text.Length > 5000 ? text[..5000] + "\n…" : text;
+
+    private static string ContentLabel(EmailLink link) => link.Kind switch
+    {
+        LinkKind.YouTubeVideo when link.ContentSource?.StartsWith("Video description") == true => "Description",
+        LinkKind.YouTubeVideo => "Transcript",
+        LinkKind.YouTubeChannel or LinkKind.YouTubePlaylist => "Recent videos",
+        _ => "Extracted text",
+    };
+
+    private static string KindLabel(LinkKind kind) => kind switch
+    {
+        LinkKind.YouTubeVideo => "YouTube video",
+        LinkKind.YouTubeChannel => "YouTube channel",
+        LinkKind.YouTubePlaylist => "YouTube playlist",
+        _ => "Web",
+    };
+
+    private static string KindBadge(LinkKind kind) => kind == LinkKind.Web ? "text-bg-secondary" : "text-bg-danger";
+
+    private static string LinkStatusLabel(EmailLink link) => link switch
+    {
+        { Status: LinkStatus.Pending } => "Waiting to fetch",
+        { Status: LinkStatus.Fetched } => "Waiting for AI summary",
+        { Status: LinkStatus.Done } => "Summarized",
+        { Status: LinkStatus.Skipped } => "Skipped",
+        _ => "Failed",
+    };
+
+    private static string LinkStatusBadge(EmailLink link) => link.Status switch
+    {
+        LinkStatus.Done => "text-bg-success",
+        LinkStatus.Failed => "text-bg-danger",
+        LinkStatus.Fetched => "text-bg-info",
+        _ => "text-bg-light border",
+    };
+}

@@ -1,0 +1,37 @@
+services:
+  # One-off, runs as root before the app: makes the shared videos folder writable for the app's non-root user.
+  # (Everything under /opt/project-nomad is owned by root; Jellyfin and File Browser run as root and can read it.)
+  nomad-inbox-init:
+    build: . # same image as the app (built once, then cached), so compose never tries to pull it
+    image: nomad-inbox:latest
+    user: root
+    entrypoint: ["sh", "-c", "mkdir -p /videos && chown \"$$APP_UID\" /videos"]
+    volumes:
+      - ${NOMADINBOX_VIDEO_DIR:-/opt/project-nomad/storage/media/youtube}:/videos
+    restart: "no"
+
+  nomad-inbox:
+    build: .
+    image: nomad-inbox:latest
+    container_name: nomad_inbox
+    restart: unless-stopped
+    depends_on:
+      nomad-inbox-init:
+        condition: service_completed_successfully
+    ports:
+      - "${NOMADINBOX_PORT:-8150}:8080"
+    environment:
+      Auth__Username: ${NOMADINBOX_ADMIN_USER:-admin}
+      Auth__Password: ${NOMADINBOX_ADMIN_PASSWORD:?Set NOMADINBOX_ADMIN_PASSWORD in .env}
+      TZ: ${TZ:-UTC}
+    volumes:
+      # SQLite database + encryption keys for the stored app password. Back this up.
+      - nomad-inbox-data:/data
+      # Saved YouTube videos, in NOMAD's shared media folder so Jellyfin (/media/youtube) and File Browser can see them.
+      - ${NOMADINBOX_VIDEO_DIR:-/opt/project-nomad/storage/media/youtube}:/videos
+    extra_hosts:
+      # Lets later phases reach NOMAD's Ollama (port 11434) and Command Center (port 8080) on the host.
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  nomad-inbox-data:

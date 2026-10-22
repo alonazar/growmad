@@ -1,0 +1,79 @@
+@page "/login"
+@layout BareLayout
+@attribute [AllowAnonymous]
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using NomadInbox.Web.Auth
+@inject AdminCredentialValidator Credentials
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in · NOMAD Inbox</PageTitle>
+
+<div class="login-card card shadow-sm">
+    <div class="card-body p-4">
+        <h1 class="h4 mb-1">NOMAD Inbox</h1>
+        <p class="text-muted mb-4">Sign in to continue.</p>
+
+        @if (error is not null)
+        {
+            <div class="alert alert-danger py-2" role="alert">@error</div>
+        }
+
+        <EditForm Model="Input" FormName="login" OnValidSubmit="SignInAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <InputText id="username" @bind-Value="Input.Username" class="form-control" autocomplete="username" autofocus />
+                <ValidationMessage For="() => Input.Username" />
+            </div>
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <InputText id="password" type="password" @bind-Value="Input.Password" class="form-control" autocomplete="current-password" />
+                <ValidationMessage For="() => Input.Password" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Sign in</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private LoginInput Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private string? error;
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task SignInAsync()
+    {
+        if (!Credentials.Validate(Input.Username, Input.Password))
+        {
+            await Task.Delay(750); // slow down guessing
+            error = "Invalid username or password.";
+            return;
+        }
+
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            Credentials.CreatePrincipal(),
+            new AuthenticationProperties { IsPersistent = true });
+
+        Navigation.NavigateTo(IsLocal(ReturnUrl) ? ReturnUrl! : "/", forceLoad: true);
+    }
+
+    private static bool IsLocal(string? url) =>
+        !string.IsNullOrEmpty(url) && url.StartsWith('/') && !url.StartsWith("//") && !url.StartsWith("/\\");
+
+    private sealed class LoginInput
+    {
+        [Required] public string Username { get; set; } = "";
+        [Required] public string Password { get; set; } = "";
+    }
+}

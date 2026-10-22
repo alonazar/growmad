@@ -1,0 +1,12 @@
+@* A small POST form for per-link actions (works without the live connection, like the email's Reprocess button). *@
+<form method="post" action="links/@LinkId/@Mode" class="d-inline">
+    <AntiforgeryToken />
+    <button type="submit" class="btn btn-link btn-sm p-0">@Label</button>
+</form>
+
+@code {
+    [Parameter, EditorRequired] public int LinkId { get; set; }
+    /// <summary>"refetch" or "resummarize".</summary>
+    [Parameter, EditorRequired] public string Mode { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+}
