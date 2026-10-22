@@ -35,16 +35,17 @@ public class NomadAddressTests
     public async Task Upgrading_replaces_only_the_old_default_addresses(string ollama, string nomad, string expectedOllama, string expectedNomad)
     {
         await using var test = await TestDatabase.CreateAsync();
+        await test.Settings.SaveAsync(new InboxSettings(), newPassword: null);
+
         await using (var db = await test.Factory.CreateDbContextAsync())
         {
+            // Back to the schema before the migration (later migrations drop their columns), with the old addresses.
             var migrator = db.GetService<IMigrator>();
             var migration = db.Database.GetMigrations().Single(m => m.EndsWith("_NomadNetworkAddresses"));
             await migrator.MigrateAsync(db.Database.GetMigrations().TakeWhile(m => m != migration).Last());
+            await db.Database.ExecuteSqlAsync($"UPDATE Settings SET OllamaUrl = {ollama}, NomadUrl = {nomad}");
+            await migrator.MigrateAsync();
         }
-        await test.Settings.SaveAsync(new InboxSettings { OllamaUrl = ollama, NomadUrl = nomad }, newPassword: null);
-
-        await using (var db = await test.Factory.CreateDbContextAsync())
-            await db.GetService<IMigrator>().MigrateAsync();
 
         var settings = await test.Settings.GetAsync();
         Assert.Equal(expectedOllama, settings.OllamaUrl);

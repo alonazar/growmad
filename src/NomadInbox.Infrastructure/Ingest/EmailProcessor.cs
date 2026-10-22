@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NomadInbox.Core.Content;
@@ -154,25 +155,71 @@ public sealed class EmailProcessor(
             return attachment;
         }
 
+        var kind = AttachmentClassifier.Classify(name, file.ContentType, file.Content);
+        if (!settings.AllowedAttachmentKinds.HasFlag(kind))
+        {
+            attachment.Note = $"Not stored: {KindName(kind)} aren't allowed (Settings → Attachments).";
+            return attachment;
+        }
+
         attachment.Sha256 = AttachmentStore.ComputeSha256(file.Content);
         var existing = await db.Attachments
             .Where(a => a.Sha256 == attachment.Sha256 && a.StoredPath != null && a.InboxEmailId != email.Id)
-            .Select(a => a.StoredPath!)
+            .Select(a => new { Path = a.StoredPath!, a.StoredAsZip })
             .FirstOrDefaultAsync(ct);
 
-        if (existing is not null && store.Exists(existing))
+        if (existing is not null && store.Exists(existing.Path))
         {
-            attachment.StoredPath = existing;
+            attachment.StoredPath = existing.Path;
+            attachment.StoredAsZip = existing.StoredAsZip;
             attachment.IsDuplicate = true;
+        }
+        else if (kind == AttachmentKinds.Executables)
+        {
+            // Zipped, so opening it from the files folder or File Browser can't run it.
+            var zip = ZipSingleFile(name, file.Content, email.ReceivedAt);
+            attachment.StoredPath = await store.SaveAsync(email.Category, email.ReceivedAt, name + ".zip", zip, AttachmentStore.ComputeSha256(zip), ct);
+            attachment.StoredAsZip = true;
         }
         else
         {
             attachment.StoredPath = await store.SaveAsync(email.Category, email.ReceivedAt, name, file.Content, attachment.Sha256, ct);
         }
 
+        if (kind == AttachmentKinds.Executables)
+        {
+            attachment.Note = attachment.StoredAsZip ? "Program or script: stored inside a zip." : null;
+            return attachment;
+        }
+
         var extraction = textExtractor.Extract(name, file.ContentType, file.Content);
         attachment.ExtractedText = extraction.Text;
         attachment.Note = extraction.Note;
         return attachment;
+    }
+
+    private static string KindName(AttachmentKinds kind) => kind switch
+    {
+        AttachmentKinds.Executables => "programs and scripts",
+        AttachmentKinds.Images => "images",
+        AttachmentKinds.Video => "videos",
+        AttachmentKinds.Audio => "audio files",
+        AttachmentKinds.Documents => "documents",
+        AttachmentKinds.Archives => "archives",
+        _ => "files of this type",
+    };
+
+    // The entry keeps the email's date so the same file always zips to the same bytes (the store de-duplicates by content).
+    private static byte[] ZipSingleFile(string name, byte[] content, DateTimeOffset modified)
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
+            entry.LastWriteTime = modified.Year is >= 1980 and <= 2107 ? modified : new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            using var stream = entry.Open();
+            stream.Write(content);
+        }
+        return buffer.ToArray();
     }
 }

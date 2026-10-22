@@ -3,6 +3,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.ComponentModel.DataAnnotations
 @using NomadInbox.Core.Mail
+@using NomadInbox.Core.Content
 @inject SettingsService SettingsService
 @inject IMailboxReader MailboxReader
 @inject MailIngestService Ingest
@@ -318,6 +319,37 @@
 
             <section class="card mb-4">
                 <div class="card-body">
+                    <h2 class="h5">Attachments</h2>
+                    <p class="text-muted small">Files of a kind that's off, or bigger than the limit, are listed on the email but not saved.</p>
+                    @foreach (var (kind, label, hint) in AttachmentKindOptions)
+                    {
+                        <div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="kind-@kind" checked="@form.AllowedAttachmentKinds.HasFlag(kind)"
+                                   @onchange="e => SetAttachmentKind(kind, e.Value is true)" />
+                            <label class="form-check-label" for="kind-@kind">@label</label>
+                            <div class="form-text mt-0 mb-2">@hint</div>
+                        </div>
+                    }
+                    @if (form.AllowedAttachmentKinds.HasFlag(AttachmentKinds.Executables))
+                    {
+                        <div class="form-text mb-2">Programs and scripts are saved inside a zip (<code>setup.exe.zip</code>), so opening one can't run it.</div>
+                        @if (string.IsNullOrWhiteSpace(form.AllowedSenders))
+                        {
+                            <div class="alert alert-warning small py-2" role="alert">
+                                <strong>Allowed senders is empty.</strong> Anyone who knows the Gmail address can send programs that get saved here.
+                                Add your own address under Filtering, or turn programs and scripts off.
+                            </div>
+                        }
+                    }
+                    <label class="form-label mt-2" for="maxMb">Largest attachment to store (MB)</label>
+                    <InputNumber id="maxMb" class="form-control" @bind-Value="form.MaxAttachmentMegabytes" />
+                    <ValidationMessage For="() => form.MaxAttachmentMegabytes" />
+                    <div class="form-text">Bigger files are listed on the email but not saved.</div>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-body">
                     <h2 class="h5">Processing</h2>
                     <div class="form-check form-switch mb-2">
                         <InputCheckbox id="labels" class="form-check-input" @bind-Value="form.ApplyLabels" />
@@ -334,11 +366,7 @@
                         </div>
                     </div>
                     <div class="form-text mb-3">Gmail creates the labels on first use. A <code>/</code> nests them, so both appear under "NOMAD".</div>
-                    <label class="form-label" for="maxMb">Largest attachment to store (MB)</label>
-                    <InputNumber id="maxMb" class="form-control" @bind-Value="form.MaxAttachmentMegabytes" />
-                    <ValidationMessage For="() => form.MaxAttachmentMegabytes" />
-                    <div class="form-text">Bigger files are listed on the email but not saved.</div>
-                    <div class="form-check form-switch mt-3">
+                    <div class="form-check form-switch">
                         <InputCheckbox id="private" class="form-check-input" @bind-Value="form.AllowPrivateNetworkLinks" />
                         <label class="form-check-label" for="private">Allow links to local-network addresses</label>
                     </div>
@@ -503,7 +531,7 @@
         testResult = null;
         try
         {
-            var account = SettingsService.CreateAccount(form!.ApplyTo(Clone(stored)), form.NewPassword);
+            var account = SettingsService.CreateAccount(form!.ApplyTo(await SettingsService.GetAsync()), form.NewPassword);
             testResult = account is null
                 ? new ConnectionTestResult(false, "Enter the server, email address and app password first.")
                 : await MailboxReader.TestConnectionAsync(account, CancellationToken.None);
@@ -520,7 +548,9 @@
         saveMessage = null;
         try
         {
-            stored = form!.ApplyTo(Clone(stored));
+            // Start from what's saved now, so settings this form doesn't show (the saved-page template and stylesheet,
+            // or anything changed elsewhere since the page opened) are kept.
+            stored = form!.ApplyTo(await SettingsService.GetAsync());
             await SettingsService.SaveAsync(stored, form.NewPassword);
             hasSavedPassword = !string.IsNullOrEmpty(stored.ProtectedPassword);
             form.NewPassword = null;
@@ -539,15 +569,22 @@
         resetMessage = $"The next check rescans \"{stored.Folder}\".";
     }
 
-    private static InboxSettings Clone(InboxSettings s) => new()
+    private static readonly (AttachmentKinds Kind, string Label, string Hint)[] AttachmentKindOptions =
+    [
+        (AttachmentKinds.Images, "Images", "jpg, png, gif, webp, heic, svg, …"),
+        (AttachmentKinds.Video, "Videos", "mp4, mkv, mov, webm, …"),
+        (AttachmentKinds.Audio, "Audio", "mp3, m4a, wav, ogg, flac, …"),
+        (AttachmentKinds.Documents, "Documents and text", "txt, pdf, Word, Excel, PowerPoint, e-books, csv, json, gpx, …"),
+        (AttachmentKinds.Archives, "Archives", "zip, 7z, rar, tar, gz, … (a zip with a program inside counts as a program)"),
+        (AttachmentKinds.Other, "Other files", "anything else that isn't a program"),
+        (AttachmentKinds.Executables, "Programs and scripts", "exe, msi, apk, sh, ps1, bat, py, dmg, iso, macro-enabled Office files, …; recognized by name and by content."),
+    ];
+
+    private void SetAttachmentKind(AttachmentKinds kind, bool allowed)
     {
-        Id = s.Id, ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username,
-        ProtectedPassword = s.ProtectedPassword, Folder = s.Folder, SubjectPrefix = s.SubjectPrefix,
-        AllowedSenders = s.AllowedSenders, ImportSince = s.ImportSince,
-        PollingEnabled = s.PollingEnabled, PollIntervalMinutes = s.PollIntervalMinutes,
-        ApplyLabels = s.ApplyLabels, ProcessedLabel = s.ProcessedLabel, FailedLabel = s.FailedLabel,
-        MaxAttachmentMegabytes = s.MaxAttachmentMegabytes,
-    };
+        form!.AllowedAttachmentKinds = allowed ? form.AllowedAttachmentKinds | kind : form.AllowedAttachmentKinds & ~kind;
+        editContext!.NotifyFieldChanged(editContext.Field(nameof(SettingsForm.AllowedAttachmentKinds)));
+    }
 
     private sealed class SettingsForm
     {
@@ -565,6 +602,7 @@
         public string? ProcessedLabel { get; set; }
         public string? FailedLabel { get; set; }
         [Range(1, 1024, ErrorMessage = "Choose between 1 and 1024 MB.")] public int MaxAttachmentMegabytes { get; set; }
+        public AttachmentKinds AllowedAttachmentKinds { get; set; }
         public bool AllowPrivateNetworkLinks { get; set; }
         public bool RenderJavaScriptPages { get; set; }
         public string? TranscriptLanguages { get; set; }
@@ -604,7 +642,7 @@
             ImportSince = s.ImportSince?.LocalDateTime.Date,
             PollingEnabled = s.PollingEnabled, PollIntervalMinutes = s.PollIntervalMinutes,
             ApplyLabels = s.ApplyLabels, ProcessedLabel = s.ProcessedLabel, FailedLabel = s.FailedLabel,
-            MaxAttachmentMegabytes = s.MaxAttachmentMegabytes,
+            MaxAttachmentMegabytes = s.MaxAttachmentMegabytes, AllowedAttachmentKinds = s.AllowedAttachmentKinds,
         };
 
         public InboxSettings ApplyTo(InboxSettings s)
@@ -622,6 +660,7 @@
             s.ProcessedLabel = string.IsNullOrWhiteSpace(ProcessedLabel) ? "NOMAD/Processed" : ProcessedLabel.Trim();
             s.FailedLabel = string.IsNullOrWhiteSpace(FailedLabel) ? "NOMAD/Failed" : FailedLabel.Trim();
             s.MaxAttachmentMegabytes = MaxAttachmentMegabytes;
+            s.AllowedAttachmentKinds = AllowedAttachmentKinds;
             s.AllowPrivateNetworkLinks = AllowPrivateNetworkLinks;
             s.RenderJavaScriptPages = RenderJavaScriptPages;
             s.TranscriptLanguages = string.IsNullOrWhiteSpace(TranscriptLanguages) ? "en" : TranscriptLanguages.Trim();

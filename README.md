@@ -245,7 +245,10 @@ Each check has two steps, and both share one schedule ("Check mail now" runs bot
   Each link is then labelled as *Web*, *YouTube video*, *YouTube playlist* or *YouTube channel*.
 - **Attachments.** Files are stored under `/data/files/{Category}/{yyyy-MM}/{name}`:
   - A file identical (by SHA-256) to one already filed isn't stored twice.
-  - Files over the size limit in Settings (50 MB by default) are listed but not stored.
+  - Files over the size limit in **Settings → Attachments** (50 MB by default) are listed but not stored.
+  - The same section has a switch per kind: images, videos, audio, documents and text, archives, other files, and programs and scripts. Files of a kind that's off are listed but not stored.
+  - Programs and scripts are off by default. They're recognized by name, by content type and by their bytes (Windows, Linux and macOS programs, `#!` scripts, zips with a program inside, also one zip deep), so a renamed `setup.exe` doesn't get through. Disk images (`.iso`, `.dmg`) and macro-enabled Office files count as programs too.
+  - When programs are allowed, each one is stored inside a zip (`setup.exe.zip`) and downloads as that zip, so opening it can't run it. Settings warns when programs are allowed while **Allowed senders** is empty.
   - Text is extracted from PDF, DOCX, PPTX, HTML, EML and plain-text files for search and later summaries.
   - Download files from the email's page.
 - **Label.** Adds `NOMAD/Processed` or `NOMAD/Failed` in Gmail. Both labels can be changed or turned off in Settings.

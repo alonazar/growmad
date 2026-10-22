@@ -106,9 +106,11 @@ app.MapGet("/attachments/{id:int}", async (int id, IDbContextFactory<NomadInboxD
     await using var db = await dbFactory.CreateDbContextAsync();
     var file = await db.Attachments.AsNoTracking().SingleOrDefaultAsync(a => a.Id == id);
     var path = file?.StoredPath is { } relative ? store.ResolveFullPath(relative) : null;
-    return path is not null && File.Exists(path)
-        ? Results.File(path, file!.ContentType, file.FileName)
-        : Results.NotFound();
+    if (path is null || !File.Exists(path)) return Results.NotFound();
+    // Programs and scripts are stored zipped; download them as the zip, never as something that runs.
+    return file!.StoredAsZip
+        ? Results.File(path, "application/zip", file.FileName + ".zip")
+        : Results.File(path, file.ContentType, file.FileName);
 }).RequireAuthorization();
 
 app.MapPost("/emails/{id:int}/delete", async (int id, HttpContext context, IAntiforgery antiforgery,

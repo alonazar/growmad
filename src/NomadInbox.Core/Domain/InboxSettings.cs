@@ -1,4 +1,5 @@
 using NomadInbox.Core.Appearance;
+using NomadInbox.Core.Content;
 
 namespace NomadInbox.Core.Domain;
 
@@ -37,6 +38,13 @@ public class InboxSettings
 
     /// <summary>Attachments larger than this are listed but not stored.</summary>
     public int MaxAttachmentMegabytes { get; set; } = 50;
+
+    /// <summary>Attachments of other kinds are listed but not stored. Allowed executables are stored zipped.</summary>
+    public AttachmentKinds AllowedAttachmentKinds { get; set; } = DefaultAttachmentKinds;
+
+    public const AttachmentKinds DefaultAttachmentKinds =
+        AttachmentKinds.Images | AttachmentKinds.Video | AttachmentKinds.Audio | AttachmentKinds.Documents |
+        AttachmentKinds.Archives | AttachmentKinds.Other;
 
     /// <summary>Links to local-network addresses (192.168.x.x, localhost, …) are refused unless this is on.</summary>
     public bool AllowPrivateNetworkLinks { get; set; }
