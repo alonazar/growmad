@@ -13,6 +13,7 @@ public sealed class MailPollerWorker(
     EmailProcessor processor,
     SettingsService settingsService,
     PollTrigger trigger,
+    Knowledge.KnowledgeTrigger knowledgeTrigger,
     PollerStatus status,
     ILogger<MailPollerWorker> logger) : BackgroundService
 {
@@ -88,6 +89,7 @@ public sealed class MailPollerWorker(
                 LastProcessing = total,
                 LastError = null,
             });
+            if (total.Processed > 0) knowledgeTrigger.Signal(); // attachments and notes for NOMAD's knowledge base
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {

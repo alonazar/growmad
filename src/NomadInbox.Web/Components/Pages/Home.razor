@@ -77,6 +77,11 @@
                         <text>· @linkCounts[LinkStatus.Fetched] waiting for the AI (<a href="settings">set up summaries</a>)</text>
                     }
                 </p>
+                <p class="small text-muted mt-1 mb-0">
+                    NOMAD knowledge base: @knowledgeCounts.GetValueOrDefault(KnowledgeState.Indexed) indexed,
+                    @(knowledgeCounts.GetValueOrDefault(KnowledgeState.Pending) + knowledgeCounts.GetValueOrDefault(KnowledgeState.Uploaded)) in progress,
+                    @knowledgeCounts.GetValueOrDefault(KnowledgeState.Failed) failed
+                </p>
             </div>
         </div>
     </div>
@@ -95,6 +100,7 @@
     private Dictionary<EmailStatus, int> counts = [];
     private List<InboxEmail> recent = [];
     private Dictionary<LinkStatus, int> linkCounts = [];
+    private Dictionary<KnowledgeState, int> knowledgeCounts = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -111,6 +117,8 @@
         recent = await db.Emails.AsNoTracking().OrderByDescending(e => e.ReceivedAt).Take(10).ToListAsync();
         linkCounts = await db.Links.Where(l => l.Kind == LinkKind.Web)
             .GroupBy(l => l.Status).ToDictionaryAsync(g => g.Key, g => g.Count());
+        knowledgeCounts = await db.KnowledgeDocuments
+            .GroupBy(d => d.State).ToDictionaryAsync(g => g.Key, g => g.Count());
     }
 
     private void TakeSnapshot()

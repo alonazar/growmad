@@ -38,6 +38,8 @@ public sealed class MailIngestService(
         var ids = scan.Matches.Select(m => m.MessageId).ToList();
         var known = (await db.Emails.Where(e => ids.Contains(e.MessageId)).Select(e => e.MessageId).ToListAsync(ct))
             .ToHashSet(StringComparer.Ordinal);
+        // Deleted on purpose: don't bring them back on a rescan.
+        known.UnionWith(await db.DeletedMessages.Where(d => ids.Contains(d.MessageId)).Select(d => d.MessageId).ToListAsync(ct));
 
         int added = 0, ignored = 0, duplicates = 0;
         foreach (var header in scan.Matches)

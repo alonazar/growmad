@@ -12,6 +12,8 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
     public DbSet<EmailLink> Links => Set<EmailLink>();
     public DbSet<EmailAttachment> Attachments => Set<EmailAttachment>();
     public DbSet<FollowedChannel> FollowedChannels => Set<FollowedChannel>();
+    public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
+    public DbSet<DeletedMessage> DeletedMessages => Set<DeletedMessage>();
     public DbSet<InboxSettings> Settings => Set<InboxSettings>();
     public DbSet<MailboxCursor> Cursors => Set<MailboxCursor>();
 
@@ -54,6 +56,15 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
         model.Entity<EmailAttachment>(e => e.HasIndex(x => x.Sha256));
 
         model.Entity<FollowedChannel>(e => e.HasIndex(x => x.ChannelId).IsUnique());
+
+        model.Entity<KnowledgeDocument>(e =>
+        {
+            e.HasIndex(x => x.ItemKey).IsUnique();
+            e.HasIndex(x => x.InboxEmailId);
+            e.Property(x => x.State).HasConversion<string>().HasMaxLength(20);
+        });
+
+        model.Entity<DeletedMessage>(e => e.HasKey(x => x.MessageId));
 
         model.Entity<InboxSettings>(e =>
         {

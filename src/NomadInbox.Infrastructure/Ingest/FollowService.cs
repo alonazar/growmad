@@ -80,6 +80,7 @@ public sealed class FollowService(
             var candidates = entries.Where(e => e.PublishedAt > channel.FollowedAt).OrderBy(e => e.PublishedAt).ToList();
             var ids = candidates.Select(e => MessageIdFor(e.VideoId)).ToList();
             var known = (await db.Emails.Where(e => ids.Contains(e.MessageId)).Select(e => e.MessageId).ToListAsync(ct)).ToHashSet();
+            known.UnionWith(await db.DeletedMessages.Where(d => ids.Contains(d.MessageId)).Select(d => d.MessageId).ToListAsync(ct));
             var fresh = candidates.Where(e => !known.Contains(MessageIdFor(e.VideoId))).TakeLast(MaxNewPerCheck).ToList();
 
             foreach (var entry in fresh)

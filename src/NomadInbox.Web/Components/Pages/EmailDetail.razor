@@ -17,18 +17,38 @@
     @if (email.Source == ItemSource.FollowedChannel)
     {
         <span class="badge text-bg-danger">New video from a followed channel</span>
-        <a class="small ms-auto" href="channels">Followed channels</a>
     }
-    else if (email.Status is EmailStatus.Done or EmailStatus.Failed or EmailStatus.Ignored)
-    {
-        <form method="post" action="emails/@email.Id/reprocess" class="ms-auto">
-            <AntiforgeryToken />
-            <button type="submit" class="btn btn-outline-secondary btn-sm"
-                    title="@(email.Status == EmailStatus.Ignored ? "Process it anyway, even though the sender isn't on the allowlist" : "Fetch the message again and redo links and attachments")">
-                @(email.Status == EmailStatus.Ignored ? "Process anyway" : "Reprocess")
-            </button>
-        </form>
-    }
+    <div class="ms-auto d-flex align-items-start gap-2">
+        @if (email.Source == ItemSource.FollowedChannel)
+        {
+            <a class="btn btn-link btn-sm" href="channels">Followed channels</a>
+        }
+        else if (email.Status is EmailStatus.Done or EmailStatus.Failed or EmailStatus.Ignored)
+        {
+            <form method="post" action="emails/@email.Id/reprocess">
+                <AntiforgeryToken />
+                <button type="submit" class="btn btn-outline-secondary btn-sm"
+                        title="@(email.Status == EmailStatus.Ignored ? "Process it anyway, even though the sender isn't on the allowlist" : "Fetch the message again and redo links and attachments")">
+                    @(email.Status == EmailStatus.Ignored ? "Process anyway" : "Reprocess")
+                </button>
+            </form>
+        }
+        <details class="delete-menu">
+            <summary class="btn btn-outline-danger btn-sm">Delete…</summary>
+            <form method="post" action="emails/@email.Id/delete" class="delete-panel card card-body shadow-sm">
+                <AntiforgeryToken />
+                <p class="small mb-2">
+                    Deletes this @(email.Source == ItemSource.FollowedChannel ? "item" : "email") with its links and attachments,
+                    and removes its documents from NOMAD's knowledge base. It won't be imported again.
+                </p>
+                <label class="form-check small mb-2">
+                    <input class="form-check-input" type="checkbox" name="deleteFiles" checked />
+                    <span class="form-check-label">Also delete its saved files (attachments, videos) unless another item uses them</span>
+                </label>
+                <button type="submit" class="btn btn-danger btn-sm">Delete permanently</button>
+            </form>
+        </details>
+    </div>
 </div>
 
 @if (email.StatusReason is not null)
@@ -219,6 +239,44 @@
     <div class="col-xl-5">
         <section class="card mb-3">
             <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <h2 class="h6 text-uppercase text-muted mb-3">NOMAD knowledge base</h2>
+                    @if (knowledge.Count > 0)
+                    {
+                        <form method="post" action="emails/@email.Id/knowledge/resend">
+                            <AntiforgeryToken />
+                            <button type="submit" class="btn btn-link btn-sm p-0" title="Upload this item's documents to NOMAD again">Resend</button>
+                        </form>
+                    }
+                </div>
+                @if (knowledge.Count == 0)
+                {
+                    <p class="small text-muted mb-0">
+                        @(email.Status == EmailStatus.Done
+                            ? "Nothing sent yet. Summaries, attachments and notes are sent once they're ready (check Settings → NOMAD knowledge base)."
+                            : "Sent once the email has been processed.")
+                    </p>
+                }
+                else
+                {
+                    <ul class="list-unstyled small mb-0">
+                        @foreach (var doc in knowledge)
+                        {
+                            <li class="mb-1">
+                                <span class="badge @KnowledgeBadge(doc.State)">@KnowledgeLabel(doc)</span>
+                                <span class="text-break">@doc.FileName</span>
+                                @if (doc.Collection is not null) { <span class="text-muted"> · @doc.Collection</span> }
+                                @if (doc.Error is not null) { <div class="text-danger">@doc.Error</div> }
+                            </li>
+                        }
+                    </ul>
+                    <div class="form-text">Ask about it in NOMAD's AI Assistant (knowledge base turned on).</div>
+                }
+            </div>
+        </section>
+
+        <section class="card mb-3">
+            <div class="card-body">
                 <h2 class="h6 text-uppercase text-muted mb-3">Indexing (from subject)</h2>
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Category</dt>
@@ -280,7 +338,26 @@
             .AsSplitQuery()
             .SingleOrDefaultAsync(e => e.Id == Id);
         followed = (await db.FollowedChannels.Where(c => c.Enabled).Select(c => c.ChannelId).ToListAsync()).ToHashSet();
+        knowledge = await db.KnowledgeDocuments.AsNoTracking().Where(d => d.InboxEmailId == Id).OrderBy(d => d.ItemKey).ToListAsync();
     }
+
+    private List<KnowledgeDocument> knowledge = [];
+
+    private static string KnowledgeLabel(KnowledgeDocument doc) => doc.State switch
+    {
+        KnowledgeState.Indexed => doc.Chunks > 0 ? $"Indexed · {doc.Chunks} chunk{(doc.Chunks == 1 ? "" : "s")}" : "Indexed",
+        KnowledgeState.Uploaded => "Embedding…",
+        KnowledgeState.Failed => "Failed",
+        _ => "Waiting",
+    };
+
+    private static string KnowledgeBadge(KnowledgeState state) => state switch
+    {
+        KnowledgeState.Indexed => "text-bg-success",
+        KnowledgeState.Uploaded => "text-bg-info",
+        KnowledgeState.Failed => "text-bg-danger",
+        _ => "text-bg-light border",
+    };
 
     private static string Preview(string text) => text.Length > 5000 ? text[..5000] + "\n…" : text;
 
