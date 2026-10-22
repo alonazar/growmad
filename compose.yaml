@@ -3,7 +3,7 @@ services:
   # (Everything under /opt/project-nomad is owned by root; Jellyfin and File Browser run as root and can read it.)
   nomad-inbox-init:
     build: . # same image as the app (built once, then cached), so compose never tries to pull it
-    image: nomad-inbox:latest
+    image: ${NOMADINBOX_IMAGE:-nomad-inbox:latest}
     user: root
     entrypoint: ["sh", "-c", "mkdir -p /videos && chown \"$$APP_UID\" /videos"]
     volumes:
@@ -12,8 +12,8 @@ services:
 
   nomad-inbox:
     build: .
-    image: nomad-inbox:latest
-    container_name: nomad_inbox
+    image: ${NOMADINBOX_IMAGE:-nomad-inbox:latest}
+    container_name: ${NOMADINBOX_CONTAINER:-nomad_inbox}
     restart: unless-stopped
     depends_on:
       nomad-inbox-init:
