@@ -112,18 +112,7 @@ If it shows as **Ignored**, the sender address isn't on your allowlist exactly a
 
 Requires Docker, which the NOMAD installer already set up. One command installs NOMAD Inbox, and the same command updates it later.
 
-**While the repository is private,** create a fine-grained GitHub token (GitHub → Settings → Developer settings → Fine-grained tokens):
-- repository access: only `alonazar/growmad`
-- permission: **Contents: Read-only**
-
-Then run, as your normal user (not root):
-
-```bash
-export GITHUB_TOKEN=github_pat_...
-curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
-```
-
-If the repository is made public, no token is needed:
+Run, as your normal user (not root):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
@@ -131,7 +120,7 @@ curl -fsSL https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | 
 
 The [install script](install.sh):
 - checks the system (Ubuntu/Debian, Docker with compose) and installs `git`, `curl` and `openssl` if missing
-- downloads the code into `~/nomad-inbox` with `git`. The token is passed for that one command only and never written to disk.
+- downloads the code into `~/nomad-inbox` with `git`
 - creates `.env` with a generated admin password, the server's time zone and a free port (8150, or the next free one)
 - builds and starts the containers, waits until NOMAD Inbox answers, and prints the address and login
 
@@ -143,10 +132,12 @@ Run again, the same command updates to the latest `main`. It keeps `.env` and al
 
 If Project NOMAD isn't installed on the machine, saved videos go to `~/nomad-inbox/videos`, and AI summaries and the knowledge base stay off until NOMAD's AI Assistant is available.
 
-On WSL you can skip the token and use your Windows GitHub login instead, through Git for Windows' credential manager. After this one-time setting, `git` in `~/nomad-inbox` works without a token:
+Installing from a private fork works too: give a fine-grained GitHub token with **Contents: Read-only** access to that repository. It's used for that run only and never written to disk:
 
 ```bash
-git config --global credential.helper '/mnt/c/Program\ Files/Git/ucrt64/bin/git-credential-manager.exe'
+export GITHUB_TOKEN=github_pat_...
+curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh \
+  | NOMADINBOX_REPO=https://github.com/<owner>/<repo>.git bash
 ```
 
 Open `http://<host>:8150` (from Windows with WSL2: `http://localhost:8150`). Port 8150 avoids NOMAD's own apps (8080, 8090, 8100-8500, 9999, 11434).

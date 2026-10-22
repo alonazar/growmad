@@ -3,13 +3,12 @@
 #
 # Run the same command to install or to update; an update keeps your .env (admin password, settings) and all data.
 #
-#   Public repository:
-#     curl -fsSL https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
 #
-#   Private repository: create a fine-grained GitHub token with read-only "Contents" access to this repository, then:
+#   From a private fork: create a fine-grained GitHub token with read-only "Contents" access to it, then:
 #     export GITHUB_TOKEN=github_pat_...
 #     curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-#       https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
+#       https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh | NOMADINBOX_REPO=https://github.com/<owner>/<repo>.git bash
 #   The token is only used for this run; it is never written to disk.
 #
 # Options (environment variables):
