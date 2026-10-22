@@ -1,24 +1,9 @@
 services:
-  # One-off, runs as root before the app: makes the shared videos and pages folders writable for the app's non-root
-  # user. (Everything under /opt/project-nomad is owned by root; Jellyfin and File Browser run as root and can read it.)
-  nomad-inbox-init:
-    build: . # same image as the app (built once, then cached), so compose never tries to pull it
-    image: ${NOMADINBOX_IMAGE:-nomad-inbox:latest}
-    user: root
-    entrypoint: ["sh", "-c", "mkdir -p /videos /pages-export && chown \"$$APP_UID\" /videos /pages-export"]
-    volumes:
-      - ${NOMADINBOX_VIDEO_DIR:-/opt/project-nomad/storage/media/youtube}:/videos
-      - ${NOMADINBOX_PAGES_DIR:-/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages}:/pages-export
-    restart: "no"
-
   nomad-inbox:
     build: .
     image: ${NOMADINBOX_IMAGE:-nomad-inbox:latest}
     container_name: ${NOMADINBOX_CONTAINER:-nomad_inbox}
     restart: unless-stopped
-    depends_on:
-      nomad-inbox-init:
-        condition: service_completed_successfully
     ports:
       - "${NOMADINBOX_PORT:-8150}:8080"
     environment:
@@ -33,7 +18,10 @@ services:
       # Saved pages: their images and videos, plus a plain-HTML copy, in NOMAD's File Browser ("nomad-inbox-pages").
       - ${NOMADINBOX_PAGES_DIR:-/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages}:/pages-export
     extra_hosts:
-      # Lets later phases reach NOMAD's Ollama (port 11434) and Command Center (port 8080) on the host.
+      # NOMAD's Ollama (port 11434) and Command Center (port 8080), published on the host. The default addresses
+      # use their container names, which also work when NOMAD runs this app itself (Supply Depot, on NOMAD's network).
+      - "nomad_ollama:host-gateway"
+      - "nomad_admin:host-gateway"
       - "host.docker.internal:host-gateway"
 
 volumes:

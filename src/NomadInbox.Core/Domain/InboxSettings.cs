@@ -46,7 +46,7 @@ public class InboxSettings
 
     // AI summaries (NOMAD's Ollama).
     public bool SummariesEnabled { get; set; } = true;
-    public string OllamaUrl { get; set; } = "http://host.docker.internal:11434";
+    public string OllamaUrl { get; set; } = "http://nomad_ollama:11434";
     public string OllamaModel { get; set; } = "";
     /// <summary>Context window requested from Ollama; long pages are split to fit.</summary>
     public int OllamaContextTokens { get; set; } = 8192;
@@ -73,7 +73,7 @@ public class InboxSettings
     // NOMAD knowledge base (Phase 5).
     public bool KnowledgeBaseEnabled { get; set; } = true;
     /// <summary>NOMAD's Command Center, as seen from the container.</summary>
-    public string NomadUrl { get; set; } = "http://host.docker.internal:8080";
+    public string NomadUrl { get; set; } = "http://nomad_admin:8080";
     /// <summary>Send the full article/transcript with each summary (better answers) or only the summary.</summary>
     public bool KnowledgeIncludeFullText { get; set; } = true;
     /// <summary>File each item into a collection named after its top-level category.</summary>

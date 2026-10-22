@@ -127,7 +127,7 @@ public sealed class NomadKnowledgeClient(HttpClient http) : INomadKnowledgeBase
     private static Uri Url(string baseUrl, string path) =>
         Uri.TryCreate(baseUrl.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var root) && root.Scheme is "http" or "https"
             ? new Uri(root, path)
-            : throw new NomadException($"\"{baseUrl}\" is not a valid NOMAD address (expected e.g. http://host.docker.internal:8080).");
+            : throw new NomadException($"\"{baseUrl}\" is not a valid NOMAD address (expected e.g. http://nomad_admin:8080).");
 
     private static string? Str(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;

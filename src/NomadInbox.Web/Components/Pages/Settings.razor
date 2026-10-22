@@ -119,7 +119,7 @@
                         <div class="col-md-7">
                             <label class="form-label" for="ollama">Ollama address</label>
                             <InputText id="ollama" class="form-control" @bind-Value="form.OllamaUrl" disabled="@(!form.SummariesEnabled)" />
-                            <div class="form-text">From the container, NOMAD's Ollama is at <code>http://host.docker.internal:11434</code>.</div>
+                            <div class="form-text">NOMAD's Ollama is at <code>http://nomad_ollama:11434</code>.</div>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label" for="ctx">Context size (tokens)</label>
@@ -175,7 +175,7 @@
                         <div class="col-md-7">
                             <label class="form-label" for="nomadUrl">NOMAD Command Center address</label>
                             <InputText id="nomadUrl" class="form-control" @bind-Value="form.NomadUrl" disabled="@(!form.KnowledgeBaseEnabled)" />
-                            <div class="form-text">From the container: <code>http://host.docker.internal:8080</code>.</div>
+                            <div class="form-text">NOMAD's Command Center is at <code>http://nomad_admin:8080</code>.</div>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label" for="kbDefault">Collection for uncategorized items</label>
@@ -630,7 +630,7 @@
             s.MaxVideoHeight = MaxVideoHeight;
             s.MaxVideoMegabytes = MaxVideoMegabytes;
             s.KnowledgeBaseEnabled = KnowledgeBaseEnabled;
-            s.NomadUrl = string.IsNullOrWhiteSpace(NomadUrl) ? "http://host.docker.internal:8080" : NomadUrl.Trim().TrimEnd('/');
+            s.NomadUrl = string.IsNullOrWhiteSpace(NomadUrl) ? "http://nomad_admin:8080" : NomadUrl.Trim().TrimEnd('/');
             s.KnowledgeIncludeFullText = KnowledgeIncludeFullText;
             s.KnowledgeCollectionPerCategory = KnowledgeCollectionPerCategory;
             s.KnowledgeDefaultCollection = string.IsNullOrWhiteSpace(KnowledgeDefaultCollection) ? "nomad inbox" : KnowledgeDefaultCollection.Trim();
@@ -639,7 +639,7 @@
             s.MaxPageAssetMegabytes = MaxPageAssetMegabytes;
             s.SaveLinkedPagesLimit = SaveLinkedPagesLimit;
             s.SummariesEnabled = SummariesEnabled;
-            s.OllamaUrl = string.IsNullOrWhiteSpace(OllamaUrl) ? "http://host.docker.internal:11434" : OllamaUrl.Trim().TrimEnd('/');
+            s.OllamaUrl = string.IsNullOrWhiteSpace(OllamaUrl) ? "http://nomad_ollama:11434" : OllamaUrl.Trim().TrimEnd('/');
             s.OllamaModel = OllamaModel?.Trim() ?? "";
             s.OllamaContextTokens = OllamaContextTokens;
             s.SummaryPrompt = string.IsNullOrWhiteSpace(SummaryPrompt) ? null : SummaryPrompt.Trim();

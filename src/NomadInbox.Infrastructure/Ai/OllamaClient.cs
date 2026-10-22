@@ -113,7 +113,7 @@ public sealed class OllamaClient(HttpClient http) : IOllamaApi
     private static Uri Url(string baseUrl, string path) =>
         Uri.TryCreate(baseUrl.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var root) && root.Scheme is "http" or "https"
             ? new Uri(root, path)
-            : throw new OllamaException($"\"{baseUrl}\" is not a valid Ollama address (expected e.g. http://host.docker.internal:11434).");
+            : throw new OllamaException($"\"{baseUrl}\" is not a valid Ollama address (expected e.g. http://nomad_ollama:11434).");
 
     private static readonly JsonSerializerOptions JsonOptions = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 }
