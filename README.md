@@ -18,6 +18,8 @@ and NOMAD Inbox records it, indexes it by the subject line, files its attachment
 - [How it works](#how-it-works)
   1. [Poll](#1-poll) · 2. [Process](#2-process) · 3. [Links](#3-links) · 4. [YouTube](#4-youtube) · 5. [NOMAD knowledge base](#5-nomad-knowledge-base) · 6. [Saved pages](#6-saved-pages)
 - [Updating](#updating)
+- [Setup](README-SETUP.md): [Supply Depot install](README-SETUP.md#install-from-nomads-supply-depot-recommended) · [Gmail](README-SETUP.md#gmail-setup) · [AI summaries](README-SETUP.md#ai-summaries) · [Moving an install.sh install](README-SETUP.md#move-an-install-made-with-installsh) · [install.sh](README-SETUP.md#run-with-installsh-instead-ubuntu--wsl2)
+- [Development](README-DEV.md): [Status](README-DEV.md#status) · [Stack](README-DEV.md#stack) · [Develop](README-DEV.md#develop) · [Releasing a version](README-DEV.md#releasing-a-version) · [Roadmap](README-DEV.md#roadmap)
 
 ## Subject syntax
 
