@@ -306,6 +306,65 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.ToTable("FollowedChannels");
                 });
 
+            modelBuilder.Entity("NomadInbox.Core.Domain.ImageDescription", b =>
+                {
+                    b.Property<string>("ImageKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Caption")
+                        .HasColumnType("TEXT");
+
+                    b.PrimitiveCollection<string>("Categories")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DescribedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageText")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourcePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.PrimitiveCollection<string>("Tags")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ImageKey");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ImageDescriptions");
+                });
+
             modelBuilder.Entity("NomadInbox.Core.Domain.InboxEmail", b =>
                 {
                     b.Property<int>("Id")
@@ -429,6 +488,12 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("DescribeImages")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DescribeImagesFrom")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("FailedLabel")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -464,6 +529,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("MaxAttachmentMegabytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxImagesPerPage")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("MaxPageAssetMegabytes")
@@ -517,6 +585,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<string>("ProtectedPassword")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PublicBaseUrl")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("RenderJavaScriptPages")
                         .HasColumnType("INTEGER");
 
@@ -549,6 +620,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<string>("VideoDownloadMode")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VisionModel")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

@@ -61,6 +61,21 @@ public class InboxSettings
     /// <summary>Custom system prompt; empty uses the built-in one.</summary>
     public string? SummaryPrompt { get; set; }
 
+    // Image descriptions (also NOMAD's Ollama).
+    /// <summary>Have the AI caption and categorize image attachments and images on saved pages.</summary>
+    public bool DescribeImages { get; set; } = true;
+    /// <summary>A model that can read images; empty uses the summary model.</summary>
+    public string? VisionModel { get; set; }
+    /// <summary>At most this many images per saved page are described, in page order.</summary>
+    public int MaxImagesPerPage { get; set; } = 10;
+    /// <summary>Only images that arrive after this are described automatically; null describes everything.</summary>
+    public DateTimeOffset? DescribeImagesFrom { get; set; }
+
+    public string ImageModel => string.IsNullOrWhiteSpace(VisionModel) ? OllamaModel : VisionModel.Trim();
+
+    public bool IsImageAiConfigured =>
+        SummariesEnabled && DescribeImages && !string.IsNullOrWhiteSpace(OllamaUrl) && !string.IsNullOrWhiteSpace(ImageModel);
+
     // YouTube.
     /// <summary>Preferred transcript languages, most preferred first (comma separated).</summary>
     public string TranscriptLanguages { get; set; } = "en";
@@ -88,6 +103,11 @@ public class InboxSettings
     public bool KnowledgeCollectionPerCategory { get; set; } = true;
     /// <summary>Collection for uncategorized items, or for everything when per-category is off.</summary>
     public string KnowledgeDefaultCollection { get; set; } = "nomad inbox";
+    /// <summary>
+    /// NOMAD Inbox's address as your browser sees it (e.g. http://localhost:8601), for "open in NOMAD Inbox" links in
+    /// knowledge base documents. Empty leaves the links out.
+    /// </summary>
+    public string? PublicBaseUrl { get; set; }
 
     // Saved pages (page archive).
     /// <summary>Which web links get a local copy: emails tagged #archive (default), all, or none.</summary>

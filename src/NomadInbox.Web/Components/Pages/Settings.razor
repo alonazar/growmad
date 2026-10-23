@@ -11,6 +11,10 @@
 @inject NomadInbox.Infrastructure.Knowledge.INomadKnowledgeBase Nomad
 @inject NomadInbox.Infrastructure.Knowledge.KnowledgeSyncService KnowledgeSync
 @inject NomadInbox.Infrastructure.Knowledge.KnowledgeTrigger KnowledgeTrigger
+@inject NomadInbox.Infrastructure.Images.ImageDescriber ImageDescriber
+@inject NomadInbox.Infrastructure.Images.ImageTrigger ImageTrigger
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+@inject NavigationManager Navigation
 @using NomadInbox.Infrastructure.Ai
 
 <PageTitle>Settings · NOMAD Inbox</PageTitle>
@@ -158,6 +162,42 @@
                                        placeholder="@Summarizer.DefaultPrompt" />
                         <div class="form-text">Leave empty to use the built-in instructions shown as the placeholder.</div>
                     </details>
+
+                    <h3 class="h6 mt-4">Image descriptions</h3>
+                    <div class="form-check form-switch mb-2">
+                        <InputCheckbox id="describe" class="form-check-input" @bind-Value="form.DescribeImages" disabled="@(!form.SummariesEnabled)" />
+                        <label class="form-check-label" for="describe">Describe image attachments and images on saved pages</label>
+                    </div>
+                    <div class="form-text mb-2">
+                        The AI writes a caption, the image's type, categories from the ones you use, tags and the text it can read.
+                        They go into NOMAD's knowledge base and show on the email's page. JPG, PNG, WebP, GIF and BMP; SVG and HEIC are skipped.
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="vision">Model for images</label>
+                            <div class="input-group">
+                                <InputText id="vision" class="form-control" list="ollama-models" @bind-Value="form.VisionModel"
+                                           placeholder="@(string.IsNullOrWhiteSpace(form.OllamaModel) ? "the summary model" : $"{form.OllamaModel} (the summary model)")"
+                                           disabled="@(!form.SummariesEnabled || !form.DescribeImages)" />
+                                <button type="button" class="btn btn-outline-secondary" @onclick="CheckVisionAsync"
+                                        disabled="@(!form.SummariesEnabled || !form.DescribeImages || checkingVision)">@(checkingVision ? "Checking…" : "Check")</button>
+                            </div>
+                            @if (visionMessage is not null) { <div class="form-text @(visionOk ? "text-success" : "text-warning-emphasis")">@visionMessage</div> }
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="perPage">Images per saved page</label>
+                            <InputNumber id="perPage" class="form-control" @bind-Value="form.MaxImagesPerPage" disabled="@(!form.SummariesEnabled || !form.DescribeImages)" />
+                            <ValidationMessage For="() => form.MaxImagesPerPage" />
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+                        @if (stored.DescribeImagesFrom is not null)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="DescribeExistingAsync"
+                                    disabled="@(!form.SummariesEnabled || !form.DescribeImages)">Describe existing images</button>
+                        }
+                        <span class="small text-muted">@imageCounts</span>
+                    </div>
                 </div>
             </section>
 
@@ -190,6 +230,17 @@
                     <div class="form-check form-switch mt-2">
                         <InputCheckbox id="kbFull" class="form-check-input" @bind-Value="form.KnowledgeIncludeFullText" disabled="@(!form.KnowledgeBaseEnabled)" />
                         <label class="form-check-label" for="kbFull">Include the full article or transcript, not just the summary (better answers)</label>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label" for="publicUrl">NOMAD Inbox address, for links</label>
+                        <InputText id="publicUrl" class="form-control" @bind-Value="form.PublicBaseUrl" placeholder="@Navigation.BaseUri.TrimEnd('/')"
+                                   disabled="@(!form.KnowledgeBaseEnabled)" />
+                        <ValidationMessage For="() => form.PublicBaseUrl" />
+                        <div class="form-text">
+                            Documents in NOMAD get links back here (the email, the image, the saved page), which NOMAD's chat can show in its answers.
+                            Use the address your browser uses for NOMAD Inbox. Leave empty for no links. Changing it re-sends every document once.
+                            @if (prefilledAddress) { <span class="text-warning-emphasis">Filled in from this page's address; click Save settings to use it.</span> }
+                        </div>
                     </div>
                     <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
                         <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="TestNomadAsync"
@@ -523,6 +574,64 @@
         // Field edits only re-render the input itself, so refresh the page to show the warning next to Save.
         editContext.OnFieldChanged += (_, _) => { dirty = true; StateHasChanged(); };
         hasSavedPassword = !string.IsNullOrEmpty(stored.ProtectedPassword);
+        if (string.IsNullOrWhiteSpace(form.PublicBaseUrl))
+        {
+            // The address this page was opened with is the one the browser uses for NOMAD Inbox.
+            form.PublicBaseUrl = Navigation.BaseUri.TrimEnd('/');
+            prefilledAddress = dirty = true;
+        }
+        await LoadImageCountsAsync();
+    }
+
+    private bool prefilledAddress;
+    private bool checkingVision, visionOk;
+    private string? visionMessage;
+    private string imageCounts = "";
+
+    private async Task LoadImageCountsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var counts = await db.ImageDescriptions.GroupBy(d => d.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+        int Count(ImageDescriptionStatus s) => counts.FirstOrDefault(c => c.Key == s)?.Count ?? 0;
+        imageCounts = counts.Count == 0 ? "No images described yet." :
+            $"{Count(ImageDescriptionStatus.Done)} described, {Count(ImageDescriptionStatus.Pending)} waiting" +
+            (Count(ImageDescriptionStatus.Failed) > 0 ? $", {Count(ImageDescriptionStatus.Failed)} failed" : "") +
+            (Count(ImageDescriptionStatus.Skipped) > 0 ? $", {Count(ImageDescriptionStatus.Skipped)} skipped (format)" : "") + ".";
+    }
+
+    private async Task CheckVisionAsync()
+    {
+        checkingVision = true;
+        visionMessage = null;
+        var model = string.IsNullOrWhiteSpace(form!.VisionModel) ? form.OllamaModel?.Trim() : form.VisionModel.Trim();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(model)) throw new OllamaException("Choose a model first.");
+            var capabilities = await Ollama.CapabilitiesAsync(form.OllamaUrl ?? "", model, CancellationToken.None);
+            visionOk = capabilities.Contains("vision");
+            visionMessage = visionOk
+                ? $"{model} can read images."
+                : capabilities.Count == 0
+                    ? $"Ollama didn't say whether {model} can read images; try it on one."
+                    : $"{model} can't read images ({string.Join(", ", capabilities)}). Use a vision model such as gemma3:4b, gemma3:12b or llava.";
+        }
+        catch (OllamaException ex)
+        {
+            visionOk = false;
+            visionMessage = ex.Message;
+        }
+        finally
+        {
+            checkingVision = false;
+        }
+    }
+
+    private async Task DescribeExistingAsync()
+    {
+        await ImageDescriber.DescribeExistingAsync(CancellationToken.None);
+        stored.DescribeImagesFrom = null;
+        ImageTrigger.Signal();
+        imageCounts = "Existing images are queued; they're described one at a time over the next minutes.";
     }
 
     private async Task TestAsync()
@@ -624,6 +733,10 @@
         public string? OllamaModel { get; set; }
         [Range(2048, 131072, ErrorMessage = "Choose between 2048 and 131072 tokens.")] public int OllamaContextTokens { get; set; }
         public string? SummaryPrompt { get; set; }
+        public bool DescribeImages { get; set; }
+        public string? VisionModel { get; set; }
+        [Range(0, 100, ErrorMessage = "Choose between 0 and 100.")] public int MaxImagesPerPage { get; set; }
+        [Url(ErrorMessage = "Enter a full address, e.g. http://localhost:8601.")] public string? PublicBaseUrl { get; set; }
 
         public static SettingsForm From(InboxSettings s) => new()
         {
@@ -637,6 +750,8 @@
             SummariesEnabled = s.SummariesEnabled,
             OllamaUrl = s.OllamaUrl, OllamaModel = s.OllamaModel, OllamaContextTokens = s.OllamaContextTokens,
             SummaryPrompt = s.SummaryPrompt,
+            DescribeImages = s.DescribeImages, VisionModel = s.VisionModel, MaxImagesPerPage = s.MaxImagesPerPage,
+            PublicBaseUrl = s.PublicBaseUrl,
             ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username, Folder = s.Folder,
             SubjectPrefix = s.SubjectPrefix, AllowedSenders = s.AllowedSenders,
             ImportSince = s.ImportSince?.LocalDateTime.Date,
@@ -682,6 +797,10 @@
             s.OllamaModel = OllamaModel?.Trim() ?? "";
             s.OllamaContextTokens = OllamaContextTokens;
             s.SummaryPrompt = string.IsNullOrWhiteSpace(SummaryPrompt) ? null : SummaryPrompt.Trim();
+            s.DescribeImages = DescribeImages;
+            s.VisionModel = string.IsNullOrWhiteSpace(VisionModel) ? null : VisionModel.Trim();
+            s.MaxImagesPerPage = MaxImagesPerPage;
+            s.PublicBaseUrl = string.IsNullOrWhiteSpace(PublicBaseUrl) ? null : PublicBaseUrl.Trim().TrimEnd('/');
             return s;
         }
     }

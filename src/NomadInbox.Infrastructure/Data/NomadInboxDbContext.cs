@@ -13,6 +13,7 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
     public DbSet<EmailAttachment> Attachments => Set<EmailAttachment>();
     public DbSet<FollowedChannel> FollowedChannels => Set<FollowedChannel>();
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
+    public DbSet<ImageDescription> ImageDescriptions => Set<ImageDescription>();
     public DbSet<DeletedMessage> DeletedMessages => Set<DeletedMessage>();
     public DbSet<ArchivedPage> Pages => Set<ArchivedPage>();
     public DbSet<PageAsset> PageAssets => Set<PageAsset>();
@@ -60,6 +61,15 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
 
         model.Entity<FollowedChannel>(e => e.HasIndex(x => x.ChannelId).IsUnique());
 
+        model.Entity<ImageDescription>(e =>
+        {
+            e.HasKey(x => x.ImageKey);
+            e.Property(x => x.ImageKey).HasMaxLength(32);
+            e.Property(x => x.Source).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => x.Status);
+        });
+
         model.Entity<KnowledgeDocument>(e =>
         {
             e.HasIndex(x => x.ItemKey).IsUnique();
@@ -92,6 +102,8 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
             e.Ignore(x => x.AllowedSenderList);
             e.Ignore(x => x.IsAiConfigured);
             e.Ignore(x => x.TranscriptLanguageList);
+            e.Ignore(x => x.ImageModel);
+            e.Ignore(x => x.IsImageAiConfigured);
             e.Property(x => x.VideoDownloadMode).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.PageArchiveMode).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Skin).HasMaxLength(40);

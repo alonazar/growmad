@@ -80,7 +80,16 @@ public sealed partial class PageRenderer(IDbContextFactory<NomadInboxDbContext> 
             ? (Href: urls.Page(t.Id, t.Title), Saved: true)
             : (Href: urls.Unsaved(l), Saved: false));
 
-        var contentHtml = ResolveMarkers(content, linkHrefs, videos, urls);
+        // The AI's captions become alt text for images the page didn't describe itself.
+        var assetKeys = (await db.PageAssets.AsNoTracking()
+                .Where(a => a.ArchivedPageId == pageId && a.Kind == AssetKind.Image && a.FileName != null)
+                .Select(a => a.FileName!).ToListAsync(ct))
+            .Select(Path.GetFileNameWithoutExtension).OfType<string>().ToList();
+        var captions = await db.ImageDescriptions.AsNoTracking()
+            .Where(d => assetKeys.Contains(d.ImageKey) && d.Status == ImageDescriptionStatus.Done && d.Caption != null)
+            .ToDictionaryAsync(d => d.ImageKey, d => d.Caption!, ct);
+
+        var contentHtml = ResolveMarkers(content, linkHrefs, videos, urls, captions);
         var linkList = new ScriptArray(page.Links.OrderBy(l => l.Position).Select(l => new ScriptObject
         {
             ["text"] = l.Text,
@@ -182,7 +191,7 @@ public sealed partial class PageRenderer(IDbContextFactory<NomadInboxDbContext> 
     }
 
     private static string ResolveMarkers(string content, IReadOnlyDictionary<int, (string Href, bool Saved)> links,
-        IReadOnlyDictionary<string, int> videos, Urls urls)
+        IReadOnlyDictionary<string, int> videos, Urls urls, IReadOnlyDictionary<string, string>? captions = null)
     {
         var doc = new HtmlParser().ParseDocument("<!doctype html><html><body></body></html>");
         doc.Body!.InnerHtml = content;
@@ -191,8 +200,13 @@ public sealed partial class PageRenderer(IDbContextFactory<NomadInboxDbContext> 
         {
             foreach (var attr in new[] { "src", "poster", "href" })
             {
-                if (el.GetAttribute(attr) is { } value && value.StartsWith(PageContentProcessor.AssetScheme, StringComparison.Ordinal))
-                    el.SetAttribute(attr, urls.Asset(value[PageContentProcessor.AssetScheme.Length..]));
+                if (el.GetAttribute(attr) is not { } value || !value.StartsWith(PageContentProcessor.AssetScheme, StringComparison.Ordinal))
+                    continue;
+                var file = value[PageContentProcessor.AssetScheme.Length..];
+                el.SetAttribute(attr, urls.Asset(file));
+                if (attr == "src" && el.LocalName == "img" && string.IsNullOrWhiteSpace(el.GetAttribute("alt")) &&
+                    captions?.GetValueOrDefault(Path.GetFileNameWithoutExtension(file)) is { } caption)
+                    el.SetAttribute("alt", caption);
             }
         }
 

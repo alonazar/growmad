@@ -71,13 +71,20 @@ public sealed class KnowledgeSyncService(
             .Where(e => e.Status == EmailStatus.Done)
             .Include(e => e.Links).Include(e => e.Attachments).AsSplitQuery()
             .ToListAsync(ct);
+        var images = await db.ImageDescriptions.AsNoTracking()
+            .Where(d => d.Status == ImageDescriptionStatus.Done).ToDictionaryAsync(d => d.ImageKey, ct);
+        var pages = (await db.Pages.AsNoTracking().Include(p => p.Assets)
+                .Where(p => p.SourceLinkId != null && p.Status == PageStatus.Done).ToListAsync(ct))
+            .GroupBy(p => p.SourceLinkId!.Value).ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.Id).First());
+        var context = new KnowledgeContext(images, pages);
+
         // One item that can't be turned into documents is skipped, not allowed to stop the sync for everything else.
         var skipped = new HashSet<int>();
         var desired = emails.SelectMany(e =>
             {
                 try
                 {
-                    return KnowledgeDocumentBuilder.Build(e, settings, store).ToList();
+                    return KnowledgeDocumentBuilder.Build(e, settings, store, context).ToList();
                 }
                 catch (Exception ex)
                 {

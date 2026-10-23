@@ -20,7 +20,7 @@
 
 <div class="row g-2 mb-3">
     <div class="col-sm-8">
-        <input class="form-control" type="search" placeholder="Search title, site, address or text"
+        <input class="form-control" type="search" placeholder="Search title, site, address, text or images"
                @bind="Q" @bind:event="oninput" @bind:after="LoadAsync" />
     </div>
     <div class="col-sm-4">
@@ -93,7 +93,12 @@ else
             query = query.Where(p => EF.Functions.Like(p.Url, like)
                                      || (p.Title != null && EF.Functions.Like(p.Title, like))
                                      || (p.SiteName != null && EF.Functions.Like(p.SiteName, like))
-                                     || (p.TextContent != null && EF.Functions.Like(p.TextContent, like)));
+                                     || (p.TextContent != null && EF.Functions.Like(p.TextContent, like))
+                                     // or what the AI saw in one of its images (assets are named by the image's key)
+                                     || db.PageAssets.Any(a => a.ArchivedPageId == p.Id && a.FileName != null &&
+                                            db.ImageDescriptions.Any(d => d.ImageKey == a.FileName.Substring(0, 32) &&
+                                                ((d.Caption != null && EF.Functions.Like(d.Caption, like)) ||
+                                                 (d.ImageText != null && EF.Functions.Like(d.ImageText, like))))));
         }
 
         total = await query.CountAsync();

@@ -223,6 +223,43 @@
                         {
                             <div class="small text-warning-emphasis">@file.Note</div>
                         }
+                        @if (ImageFor(file) is { } image)
+                        {
+                            <div class="image-description small mt-1">
+                                @switch (image.Status)
+                                {
+                                    case ImageDescriptionStatus.Done:
+                                        <div>@image.Caption</div>
+                                        <div class="mt-1 d-flex flex-wrap gap-1">
+                                            <span class="badge text-bg-secondary">@image.ImageType</span>
+                                            @foreach (var category in image.Categories) { <span class="badge text-bg-light border category">@category</span> }
+                                            @foreach (var tag in image.Tags) { <span class="badge rounded-pill text-bg-light border">#@tag</span> }
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(image.ImageText))
+                                        {
+                                            <details class="mt-1"><summary>Text in the image</summary><pre class="extracted">@image.ImageText</pre></details>
+                                        }
+                                        break;
+                                    case ImageDescriptionStatus.Pending:
+                                        <span class="text-muted">Waiting for an AI description@(image.Error is null ? "" : $" (last try: {image.Error})")</span>
+                                        break;
+                                    case ImageDescriptionStatus.Failed:
+                                        <span class="text-danger">AI description failed: @image.Error</span>
+                                        break;
+                                    default:
+                                        <span class="text-muted">No AI description: @image.Error</span>
+                                        break;
+                                }
+                                @if (image.Status is ImageDescriptionStatus.Done or ImageDescriptionStatus.Failed)
+                                {
+                                    <form method="post" action="images/@image.ImageKey/redescribe" class="d-inline">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="returnUrl" value="/emails/@email.Id" />
+                                        <button type="submit" class="btn btn-link btn-sm p-0 mt-1">Redescribe</button>
+                                    </form>
+                                }
+                            </div>
+                        }
                         @if (file.ExtractedText is { Length: > 0 } text)
                         {
                             <details class="small mt-1">
@@ -356,7 +393,14 @@
         var urls = email?.Links.Select(l => l.Url).ToList() ?? [];
         savedPages = (await db.Pages.AsNoTracking().Where(p => urls.Contains(p.Url)).Select(p => new { p.Url, p.Id, p.Status }).ToListAsync())
             .ToDictionary(p => p.Url, p => (p.Id, p.Status));
+        var keys = email?.Attachments.Where(a => a.Sha256 is not null).Select(a => ImageDescription.KeyFor(a.Sha256!)).ToList() ?? [];
+        images = await db.ImageDescriptions.AsNoTracking().Where(d => keys.Contains(d.ImageKey)).ToDictionaryAsync(d => d.ImageKey);
     }
+
+    private Dictionary<string, ImageDescription> images = [];
+
+    private ImageDescription? ImageFor(EmailAttachment file) =>
+        file.Sha256 is not null && images.TryGetValue(ImageDescription.KeyFor(file.Sha256), out var image) ? image : null;
 
     private Dictionary<string, (int Id, PageStatus Status)> savedPages = [];
 

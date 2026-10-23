@@ -102,6 +102,10 @@ If it shows as **Ignored**, the sender address isn't on your allowlist exactly a
 
 The summary instructions can be changed under **Summary instructions (advanced)**.
 
+**Image descriptions** use the same model when it can read images (`gemma3:12b` can). Under **Image descriptions**, click **Check** to confirm, or enter a vision model under **Model for images**. Click **Describe existing images** once to describe the images you already have.
+
+For links from NOMAD's chat back to NOMAD Inbox, check **NOMAD knowledge base → NOMAD Inbox address, for links**: it's filled in from the address you opened Settings with (e.g. `http://localhost:8601`); click **Save settings** to use it.
+
 ## Move an install made with install.sh
 
 Your emails, settings and the stored Gmail app password move along; saved videos and pages are already in NOMAD's folders. In Ubuntu:
