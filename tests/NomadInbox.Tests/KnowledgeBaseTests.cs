@@ -252,7 +252,22 @@ public sealed class KnowledgeSyncTests : IAsyncLifetime
         Assert.Empty(_nomad.Files);
     }
 
-    private async Task<int> AddEmailWithLinkAsync(string summary)
+    [Fact]
+    public async Task Link_with_a_long_title_is_uploaded()
+    {
+        await AddEmailWithLinkAsync("Summary", "GitHub - alonazar/growmad: Email-driven intake for a Project NOMAD server. Send mail to a " +
+            "Gmail account with a subject and Growmad records it, indexes it by the subject line, files its attachments, collects " +
+            "its links, and (in later phases) summarizes those links.");
+
+        var outcome = await _sync.RunOnceAsync(default);
+
+        Assert.Equal(1, outcome.Uploaded);
+        var doc = await SingleDocAsync();
+        Assert.EndsWith(".md", doc.FileName);
+        Assert.True(doc.FileName.Length <= 93, doc.FileName);
+    }
+
+    private async Task<int> AddEmailWithLinkAsync(string summary, string title = "Guide")
     {
         await using var db = await _db.Factory.CreateDbContextAsync();
         var email = new InboxEmail
@@ -262,7 +277,7 @@ public sealed class KnowledgeSyncTests : IAsyncLifetime
         };
         email.Links.Add(new EmailLink
         {
-            Url = "https://example.com/guide", Kind = LinkKind.Web, Status = LinkStatus.Done, Title = "Guide",
+            Url = "https://example.com/guide", Kind = LinkKind.Web, Status = LinkStatus.Done, Title = title,
             Summary = summary, ContentText = "Article",
         });
         db.Emails.Add(email);
