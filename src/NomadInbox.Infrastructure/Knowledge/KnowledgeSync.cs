@@ -71,12 +71,27 @@ public sealed class KnowledgeSyncService(
             .Where(e => e.Status == EmailStatus.Done)
             .Include(e => e.Links).Include(e => e.Attachments).AsSplitQuery()
             .ToListAsync(ct);
-        var desired = emails.SelectMany(e => KnowledgeDocumentBuilder.Build(e, settings, store))
+        // One item that can't be turned into documents is skipped, not allowed to stop the sync for everything else.
+        var skipped = new HashSet<int>();
+        var desired = emails.SelectMany(e =>
+            {
+                try
+                {
+                    return KnowledgeDocumentBuilder.Build(e, settings, store).ToList();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Skipping email {Id} in the knowledge base sync: {Message}", e.Id, ex.Message);
+                    skipped.Add(e.Id);
+                    return [];
+                }
+            })
             .GroupBy(d => d.ItemKey).ToDictionary(g => g.Key, g => g.First());
 
-        // 3. Remove documents whose item is gone (deleted, reprocessed into something else, ...).
+        // 3. Remove documents whose item is gone (deleted, reprocessed into something else, ...). A skipped email's
+        // documents stay in NOMAD as they are.
         var removed = 0;
-        foreach (var doc in sent.Values.Where(d => !desired.ContainsKey(d.ItemKey)).ToList())
+        foreach (var doc in sent.Values.Where(d => !desired.ContainsKey(d.ItemKey) && !skipped.Contains(d.InboxEmailId)).ToList())
         {
             if (await RemoveRemoteAsync(doc, settings, byFileName, ct))
             {
@@ -201,7 +216,7 @@ public sealed class KnowledgeSyncWorker(
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
-                    logger.LogWarning("Knowledge base sync failed: {Message}", ex.Message);
+                    logger.LogWarning(ex, "Knowledge base sync failed: {Message}", ex.Message);
                 }
                 if (!outcome.DidWork) await trigger.WaitAsync(Idle, stoppingToken);
             }

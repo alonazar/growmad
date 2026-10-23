@@ -57,6 +57,32 @@ public sealed class AttachmentStoreTests : IDisposable
         Assert.Equal(expected, AttachmentStore.SanitizeFileName(input));
     }
 
+    // The page title that stopped the knowledge base sync: over 120 characters, with text after its last dot that is
+    // too long to be an extension and a part before that dot shorter than 120.
+    private const string LongTitle = "2026-10-22 GitHub - alonazar/growmad: Email-driven intake for a Project NOMAD server. Send mail to a Gmail account " +
+        "with a subject and Growmad records it, indexes it by the subject line, files its attachments, collects its links, and " +
+        "(in later phases) summarizes those links.";
+
+    [Fact]
+    public void Long_name_with_text_after_a_dot_is_cut_without_failing()
+    {
+        var name = AttachmentStore.SanitizeFileName(LongTitle);
+
+        Assert.True(name.Length <= 120, $"{name.Length} characters");
+        Assert.StartsWith("growmad_ Email-driven intake for a Project NOMAD server. Send mail", name);
+    }
+
+    [Theory]
+    [InlineData(".pdf")]
+    [InlineData(".tar.gz")]
+    public void Long_name_keeps_a_real_extension(string extension)
+    {
+        var name = AttachmentStore.SanitizeFileName(new string('a', 200) + extension);
+
+        Assert.Equal(120, name.Length);
+        Assert.EndsWith(Path.GetExtension(extension), name);
+    }
+
     [Fact]
     public async Task Category_cannot_escape_the_root()
     {

@@ -67,9 +67,11 @@ public sealed class AttachmentStore(string root)
 
         if (name.Length > 120)
         {
+            // Keep a real extension. A long "extension" is just text after a dot ("…server. Send mail…"), so then the
+            // whole name is cut, never only the part before that dot (which can be shorter than the cut).
             var ext = Path.GetExtension(name);
-            ext = ext.Length > 15 ? "" : ext;
-            name = Path.GetFileNameWithoutExtension(name)[..(120 - ext.Length)] + ext;
+            if (ext.Length > 15) ext = "";
+            name = name[..(120 - ext.Length)].TrimEnd(' ', '.') + ext;
         }
         return name;
     }
