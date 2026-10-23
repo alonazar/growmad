@@ -9,6 +9,7 @@ using NomadInbox.Core.Domain;
 using NomadInbox.Infrastructure;
 using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
+using NomadInbox.Infrastructure.Images;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Knowledge;
 using NomadInbox.Infrastructure.Settings;
@@ -98,6 +99,16 @@ app.MapPost("/appearance/mode", async (SettingsService settings, [FromForm] stri
     var current = await settings.GetAsync();
     await settings.SaveAppearanceAsync(current.Skin, UiAppearance.Next(current.ColorMode));
     var local = returnUrl is ['/', not '/' and not '\\', ..] or "/";
+    return Results.LocalRedirect(local ? returnUrl! : "~/");
+}).RequireAuthorization();
+
+// The Redescribe button on an image: ask the AI again.
+app.MapPost("/images/{key:regex(^[0-9a-f]{{32}}$)}/redescribe", async (string key, ImageDescriber describer, ImageTrigger trigger,
+    [FromForm] string? returnUrl) =>
+{
+    await describer.RedescribeAsync(key, CancellationToken.None);
+    trigger.Signal();
+    var local = returnUrl is ['/', not '/' and not '\\', ..];
     return Results.LocalRedirect(local ? returnUrl! : "~/");
 }).RequireAuthorization();
 

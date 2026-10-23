@@ -24,6 +24,18 @@ public sealed class FakeOllama : IOllamaApi
         Calls.Add((model, system, user));
         return Task.FromResult(Reply(system, user));
     }
+
+    /// <summary>Answers image requests; gets the prompt and the image bytes.</summary>
+    public Func<string, byte[], string> ImageReply { get; set; } = (_, _) =>
+        """{"caption":"A water filter on a table.","type":"photo","categories":["Survival/Water"],"tags":["filter","ceramic"],"text":""}""";
+    public List<(string Model, string Prompt, byte[] Image)> ImageCalls { get; } = [];
+
+    public Task<string> DescribeImageAsync(string baseUrl, string model, string prompt, byte[] image, System.Text.Json.Nodes.JsonNode format, CancellationToken ct)
+    {
+        if (!Up) throw new OllamaException("Can't reach Ollama at http://ollama: connection refused");
+        ImageCalls.Add((model, prompt, image));
+        return Task.FromResult(ImageReply(prompt, image));
+    }
 }
 
 public class SummarizerTests

@@ -14,6 +14,8 @@ public interface IOllamaApi
 {
     Task<string> VersionAsync(string baseUrl, CancellationToken ct);
     Task<string> ChatAsync(string baseUrl, string model, string system, string user, int contextTokens, CancellationToken ct);
+    /// <summary>Asks a vision model about one image; the answer is JSON shaped by <paramref name="format"/>.</summary>
+    Task<string> DescribeImageAsync(string baseUrl, string model, string prompt, byte[] image, JsonNode format, CancellationToken ct);
 }
 
 /// <summary>Minimal client for the Ollama HTTP API (/api/version, /api/tags, /api/chat).</summary>
@@ -67,6 +69,33 @@ public sealed class OllamaClient(HttpClient http) : IOllamaApi
 
         var content = json?["message"]?["content"]?.GetValue<string>() ?? "";
         return StripThinking(content).Trim();
+    }
+
+    public async Task<string> DescribeImageAsync(string baseUrl, string model, string prompt, byte[] image, JsonNode format, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = model,
+            ["stream"] = false,
+            ["keep_alive"] = "10m",
+            ["format"] = format.DeepClone(),
+            ["messages"] = new JsonArray(new JsonObject
+            {
+                ["role"] = "user",
+                ["content"] = prompt,
+                ["images"] = new JsonArray(Convert.ToBase64String(image)),
+            }),
+            ["options"] = new JsonObject { ["num_ctx"] = 4096, ["temperature"] = 0.2 },
+        };
+        var json = await SendAsync(HttpMethod.Post, Url(baseUrl, "api/chat"), body, TimeSpan.FromMinutes(5), ct);
+        return StripThinking(json?["message"]?["content"]?.GetValue<string>() ?? "").Trim();
+    }
+
+    /// <summary>What a model can do ("completion", "vision", …), from /api/show; empty when Ollama doesn't say.</summary>
+    public async Task<IReadOnlyList<string>> CapabilitiesAsync(string baseUrl, string model, CancellationToken ct)
+    {
+        var json = await SendAsync(HttpMethod.Post, Url(baseUrl, "api/show"), new JsonObject { ["model"] = model }, TimeSpan.FromSeconds(15), ct);
+        return json?["capabilities"] is JsonArray list ? list.Select(c => c?.GetValue<string>() ?? "").Where(c => c.Length > 0).ToList() : [];
     }
 
     /// <summary>Removes &lt;think&gt;…&lt;/think&gt; blocks some models emit even when asked not to.</summary>

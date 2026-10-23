@@ -7,6 +7,7 @@ using NomadInbox.Infrastructure.Web;
 using NomadInbox.Infrastructure.YouTube;
 using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
+using NomadInbox.Infrastructure.Images;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Knowledge;
 using NomadInbox.Infrastructure.Pages;
@@ -83,6 +84,11 @@ public static class DependencyInjection
         services.AddSingleton<PageTrigger>();
         services.AddSingleton<PageService>();
         services.AddHostedService<PageArchiveWorker>();
+
+        // Image descriptions for the knowledge base (NOMAD's Ollama, with a model that can read images).
+        services.AddSingleton<ImageDescriber>();
+        services.AddSingleton<ImageTrigger>();
+        services.AddHostedService<ImageDescriptionWorker>();
 
         services.AddSingleton<LinkProcessor>();
         services.AddSingleton<LinkTrigger>();

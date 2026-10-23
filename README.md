@@ -16,7 +16,7 @@ and NOMAD Inbox records it, indexes it by the subject line, files its attachment
 
 - [Subject syntax](#subject-syntax)
 - [How it works](#how-it-works)
-  1. [Poll](#1-poll) · 2. [Process](#2-process) · 3. [Links](#3-links) · 4. [YouTube](#4-youtube) · 5. [NOMAD knowledge base](#5-nomad-knowledge-base) · 6. [Saved pages](#6-saved-pages)
+  1. [Poll](#1-poll) · 2. [Process](#2-process) · 3. [Links](#3-links) · 4. [YouTube](#4-youtube) · 5. [NOMAD knowledge base](#5-nomad-knowledge-base) · 6. [Saved pages](#6-saved-pages) · 7. [Image descriptions](#7-image-descriptions)
 - [Updating](#updating)
 - [Setup](README-SETUP.md): [Supply Depot install](README-SETUP.md#install-from-nomads-supply-depot-recommended) · [Gmail](README-SETUP.md#gmail-setup) · [AI summaries](README-SETUP.md#ai-summaries) · [Moving an install.sh install](README-SETUP.md#move-an-install-made-with-installsh) · [install.sh](README-SETUP.md#run-with-installsh-instead-ubuntu--wsl2)
 - [Development](README-DEV.md): [Status](README-DEV.md#status) · [Stack](README-DEV.md#stack) · [Develop](README-DEV.md#develop) · [Releasing a version](README-DEV.md#releasing-a-version) · [Roadmap](README-DEV.md#roadmap)
@@ -116,6 +116,7 @@ How it's filed and kept in step:
 - **Reconciliation.** The sync compares what *should* be in NOMAD with what NOMAD Inbox has sent: it uploads new documents, replaces changed ones (e.g. after **Summarize again**), and removes documents whose item was deleted. It runs after changes and every 2 minutes, sends at most 10 uploads per run, and shows NOMAD's embedding state (*Embedding…* → *Indexed · N chunks*) on each item's page.
 - **Controls.** **Resend** (per item) and **Resend everything** (Settings) send again. If NOMAD isn't reachable, it simply waits.
 - **Deleting.** **Delete…** on an item's page removes it with its links and attachments, and optionally its files: attachments and saved videos, unless another item uses them. Its documents are removed from NOMAD on the next sync, and its Message-ID is remembered, so a folder rescan or channel check won't bring it back.
+- **Links back.** With **NOMAD Inbox address, for links** set in Settings (it's filled in from the address you open Settings with), every document links back to its email in NOMAD Inbox, image cards to the image, and saved pages to the saved copy. NOMAD's chat shows these links when its answer repeats them; its *Sources* list shows titles only. Names sent to NOMAD are plain ASCII.
 
 ### 6. Saved pages
 
@@ -131,6 +132,19 @@ A web link can also get a local copy of the page. This happens for emails tagged
   - `index.html` lists the pages by category, and each page has its own folder, `pages/<id>-<title>/index.html`, sharing `assets/` and `style.css`.
   - Links between saved pages are relative, so the folder also works when copied elsewhere and opened in a browser.
   - The images and videos live only here, and the app serves them from here, so nothing is stored twice. `NOMADINBOX_PAGES_DIR` changes the folder.
+
+### 7. Image descriptions
+
+NOMAD's Ollama looks at image attachments and at images on saved pages (the first 10 per page by default, without icons and logos) and describes each one, in the background and one at a time:
+
+- **What it writes.** A caption of one or two sentences, the image's type (photo, diagram, map, chart, screenshot, document scan, illustration or other), up to 3 categories chosen from the ones you already use in NOMAD Inbox, up to 8 tags, and the text it can read in the image.
+- **Model.** The summary model is used if it can read images (`gemma3:4b` and up can); **Settings → AI summaries → Model for images** picks another one, and **Check** asks Ollama whether a model can read images.
+- **Formats.** JPG, PNG, WebP, GIF and BMP. SVG and HEIC are listed as skipped. Each picture is described once, by content, even when several emails or pages use it.
+- **Where it shows.** Under each image attachment on the email's page (with **Redescribe**), as the alt text of images in saved pages, and in Library search.
+- **Knowledge base.** A described image attachment goes into NOMAD's knowledge base as an *image card* (a Markdown document with all of the above and links to the image and the email) instead of the image file. A saved page's document gets an **Images** section listing its described images.
+- **Existing images.** Images that arrive after the feature is turned on are described automatically; **Describe existing images** in Settings describes the ones that were already there.
+
+If Ollama isn't running, images wait and are described once it's back. A description that fails is retried twice, then marked failed.
 
 ## Updating
 
