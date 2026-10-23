@@ -7,33 +7,17 @@ Send mail to a Gmail account with a subject like
 NOMAD: Survival/Water #filtration #diy priority=high Ceramic filter builds
 ```
 
-and NOMAD Inbox records it, indexes it by the subject line, files its attachments, collects its links, and (in later phases) summarizes those links.
+and NOMAD Inbox records it, indexes it by the subject line, files its attachments, collects its links and summarizes them with NOMAD's AI. Web pages can be saved for offline reading, YouTube videos get transcripts, summaries and optional downloads, and everything goes into the knowledge base of NOMAD's AI Assistant, so you can ask about it in NOMAD's chat.
 
-**Status: Phase 5.** Done so far:
-- **Phase 1:** IMAP polling, subject indexing, sender allowlist, a web UI with login, SQLite storage and the Docker setup.
-- **Phase 2:** full message processing. That covers the body text, link extraction and classification, attachment filing with de-duplication and text extraction, and Gmail labels.
-- **Phase 3:** web links are fetched, their readable text is extracted, and NOMAD's Ollama summarizes them.
-- **Phase 4:** YouTube videos are summarized from their transcripts, channels and playlists get a profile, and followed channels add their new videos automatically.
-- **Phase 5:** everything goes into the knowledge base of NOMAD's AI Assistant, so you can ask about it in NOMAD's chat; items can be deleted.
-- **Saved pages:** local copies of web pages (content with its formatting, images, videos and links), read in the **Library** through an editable template, and copied as plain HTML into NOMAD's File Browser.
+- **Install it:** [README-SETUP](README-SETUP.md): NOMAD's Supply Depot, Gmail, AI summaries
+- **Work on it:** [README-DEV](README-DEV.md): status, stack, development, releases, roadmap
 
-Hardening comes next (see [Roadmap](#roadmap)).
+## Contents
 
-## Stack
-
-- .NET 10 (LTS), ASP.NET Core, Blazor (interactive server rendering)
-- MailKit for IMAP. It never marks mail as read; the only change it makes to the mailbox is adding labels.
-- EF Core + SQLite; the IMAP app password is encrypted with ASP.NET Data Protection
-- PdfPig and Open XML SDK for text extraction from attachments
-- SmartReader (a port of Firefox's Reader View) for article text, Markdig for rendering summaries, Ollama's HTTP API for the summaries
-- Docker: a NOMAD Supply Depot custom app (image on GHCR), or Docker Compose next to NOMAD on the same Ubuntu/WSL host
-
-```
-src/NomadInbox.Core            domain model, subject parser, link extractor, HTML-to-text, mailbox interfaces
-src/NomadInbox.Infrastructure  EF Core, MailKit reader/session, ingest + processor, attachment store, text extraction
-src/NomadInbox.Web             Blazor UI, login, downloads, startup
-tests/NomadInbox.Tests         xUnit tests
-```
+- [Subject syntax](#subject-syntax)
+- [How it works](#how-it-works)
+  1. [Poll](#1-poll) · 2. [Process](#2-process) · 3. [Links](#3-links) · 4. [YouTube](#4-youtube) · 5. [NOMAD knowledge base](#5-nomad-knowledge-base) · 6. [Saved pages](#6-saved-pages)
+- [Updating](#updating)
 
 ## Subject syntax
 
@@ -47,203 +31,17 @@ tests/NomadInbox.Tests         xUnit tests
 
 The Settings page has a live preview.
 
-## Gmail setup
-
-### 1. Create a dedicated Gmail account (recommended)
-
-Create a new account at <https://accounts.google.com/signup>, e.g. `yourname.nomad@gmail.com`. Keeping it separate means NOMAD Inbox never has access to your personal mail.
-
-### 2. Turn on 2-Step Verification
-
-Signed in as the new account:
-
-1. Go to <https://myaccount.google.com/security>.
-2. Under **How you sign in to Google**, turn on **2-Step Verification**. A phone number or the Google Authenticator app is fine.
-
-Google only offers app passwords once 2-Step Verification is on.
-
-### 3. Create an app password
-
-1. Go to <https://myaccount.google.com/apppasswords>.
-2. Name it `NOMAD Inbox` and click **Create**.
-3. Google shows a 16-character code like `abcd efgh ijkl mnop`. **Copy it now**, because Google won't show it again. The spaces don't matter; NOMAD Inbox strips them.
-
-If that page says *"The setting you're looking for is not available"*, either 2-Step Verification isn't fully on yet, or the account uses only security keys or Advanced Protection.
-
-### 4. Enter it in NOMAD Inbox
-
-Open NOMAD Inbox's **Settings** and sign in as `admin`: from the Supply Depot, click **Open**; with install.sh, open `http://localhost:8150/settings`. The password is the `Auth__Password` you gave the Supply Depot, or for install.sh, run this in Ubuntu:
-
-```bash
-grep PASSWORD ~/nomad-inbox/.env
-```
-
-Then fill in:
-
-| Field | Value |
-|---|---|
-| IMAP server / Port | leave `imap.gmail.com` / `993` |
-| Email address | the new Gmail address |
-| App password | the 16-character code |
-| Folder | leave `INBOX` |
-| Subject prefix | leave `NOMAD:` (or change it) |
-| **Allowed senders** | the address(es) **you'll send from**, one per line, e.g. your personal Gmail. You can also allow a whole domain with `@yourdomain.com`. Mail from anyone else is recorded as *Ignored* and never processed. |
-| On first scan, skip mail before | today's date (optional, skips Google's welcome emails) |
-
-Then:
-
-1. Click **Test connection**. You should see *Connected. "INBOX" contains N messages.*
-   - *Login failed* means the app password is wrong or 2-Step Verification is off.
-2. Turn on **Check for new mail automatically**. Every 5 minutes is fine.
-3. Click **Save settings**. Saving starts a check right away.
-
-### 5. Send a test email
-
-From an allowed address, send an email to the new Gmail account with a subject like:
-
-```
-NOMAD: Survival/Water #filtration #test Ceramic filter test
-```
-
-Put a link or two in the body and attach a file. Then click **Check mail now** on the dashboard, or wait for the next check. The email should appear with category `Survival/Water` and tags `filtration` and `test`. Once it's processed, its links and attachments are listed on its page, and Gmail shows it with the `NOMAD/Processed` label.
-
-If it shows as **Ignored**, the sender address isn't on your allowlist exactly as Gmail reports it.
-
-## Install from NOMAD's Supply Depot (recommended)
-
-NOMAD can run NOMAD Inbox as a custom app, next to its own apps: it gets an **Open** button, and **Manage** gives you Edit, Logs, Stats, Update and Remove. App settings (Gmail, AI, Appearance, …) stay on NOMAD Inbox's own Settings page.
-
-In NOMAD's Command Center, open the **Supply Depot**, click **Add a custom app**, and fill in:
-
-| Field | Value |
-|---|---|
-| Docker Image | `ghcr.io/alonazar/nomad-inbox:latest` (NOMAD warns that `:latest` is a moving tag; tick **install anyway**, see [Updating](#updating)) |
-| Display Name | `NOMAD Inbox` |
-| Port | container `8080` → a free host port, e.g. `8601` |
-| Volumes | `/opt/project-nomad/storage/nomad-inbox` → `/data` (database and keys: back this up) |
-| | `/opt/project-nomad/storage/media/youtube` → `/videos` (saved videos, seen by Jellyfin and File Browser) |
-| | `/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages` → `/pages-export` (saved pages, seen in File Browser) |
-| Environment | `Auth__Password=<a password for the web UI>` (sign in as `admin`) and `TZ=<your time zone>`, e.g. `TZ=America/New_York` |
-| Memory / CPUs | `2048` MB and `2` (the page renderer and video downloads need more than the 1 GB default) |
-
-NOMAD downloads the image and starts it; the container creates its folders itself. Then click **Open** and continue with [Gmail setup](#gmail-setup). The AI and knowledge base addresses already point at NOMAD (`nomad_ollama`, `nomad_admin`).
-
-To change the password or time zone later, use **Manage › Edit**.
-
-### Updating
-
-Use **Manage › Update (pull latest)** on the app's card. NOMAD downloads the image's tag again and restarts the app with your data; if the new version doesn't start, it goes back to the one that was running. Database migrations run on start.
-
-That's why the image is `:latest`: every release publishes `latest` (see [Releasing a version](#releasing-a-version)), and for custom apps NOMAD's Update only re-downloads the tag the app is set to. With a pinned tag such as `:1.0.4`, Update just fetches 1.0.4 again; to move to another version you'd change the tag in **Manage › Edit**. The **Update available** pill, the version choice and automatic updates are for NOMAD's own catalog apps only, so they don't appear for NOMAD Inbox, and its card shows `latest` instead of a version number.
-
-To go back to an older version, set the image to that version's tag in **Manage › Edit**, e.g. `ghcr.io/alonazar/nomad-inbox:1.0.2` ([all versions](https://github.com/alonazar/growmad/pkgs/container/nomad-inbox)). The database isn't migrated back, so only do this between versions with the same database.
-
-### Move an install made with install.sh
-
-Your emails, settings and the stored Gmail app password move along; saved videos and pages are already in NOMAD's folders. In Ubuntu:
-
-1. Note your admin password and time zone, then stop the old app. **Never run both at once**: both would check Gmail and process the same mail.
-   ```bash
-   grep -E '^(NOMADINBOX_ADMIN_PASSWORD|TZ)=' ~/nomad-inbox/.env
-   cd ~/nomad-inbox && docker compose stop
-   ```
-2. Copy the data volume (database, `keys/`, `files/`, `pages/`) into NOMAD's storage, using the NOMAD Inbox image itself:
-   ```bash
-   docker volume ls | grep nomad-inbox   # usually nomad-inbox_nomad-inbox-data
-   sudo mkdir -p /opt/project-nomad/storage/nomad-inbox
-   docker run --rm --entrypoint cp -v nomad-inbox_nomad-inbox-data:/from:ro \
-     -v /opt/project-nomad/storage/nomad-inbox:/to ghcr.io/alonazar/nomad-inbox:latest -a /from/. /to/
-   ```
-3. Add the custom app as above, with the same password and time zone. Open it and check your emails, Settings (**Test connection**) and Library.
-4. When all is well, remove the old containers. Without `-v` the old volume stays as a backup; delete it later with `docker volume rm nomad-inbox_nomad-inbox-data`.
-   ```bash
-   cd ~/nomad-inbox && docker compose down
-   ```
-
-To go back before step 4: remove the custom app in the Supply Depot, then `cd ~/nomad-inbox && docker compose up -d`.
-
-## Run on the NOMAD host with install.sh (Ubuntu / WSL2)
-
-Without NOMAD's Supply Depot, or to run a branch. Requires Docker, which the NOMAD installer already set up. One command installs NOMAD Inbox, and the same command updates it later.
-
-Run, as your normal user (not root):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/alonazar/growmad/main/install.sh | bash
-```
-
-The [install script](install.sh):
-- checks the system (Ubuntu/Debian, Docker with compose) and installs `git`, `curl` and `openssl` if missing
-- downloads the code into `~/nomad-inbox` with `git`
-- creates `.env` with a generated admin password, the server's time zone and a free port (8150, or the next free one)
-- builds and starts the containers, waits until NOMAD Inbox answers, and prints the address and login
-
-Run again, the same command updates to the latest `main`. It keeps `.env` and all data, and stops if tracked files were changed locally. Options are environment variables, documented at the top of the script:
-- `NOMADINBOX_DIR`: install folder
-- `NOMADINBOX_BRANCH`: branch to install
-- `NOMADINBOX_PORT`: web port for a new install
-- `NOMADINBOX_REPO`: repository to install from
-
-If Project NOMAD isn't installed on the machine, saved videos go to `~/nomad-inbox/videos`, and AI summaries and the knowledge base stay off until NOMAD's AI Assistant is available.
-
-Installing from a private fork works too: give a fine-grained GitHub token with **Contents: Read-only** access to that repository. It's used for that run only and never written to disk:
-
-```bash
-export GITHUB_TOKEN=github_pat_...
-curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh \
-  | NOMADINBOX_REPO=https://github.com/<owner>/<repo>.git bash
-```
-
-Open `http://<host>:8150` (from Windows with WSL2: `http://localhost:8150`). Port 8150 avoids NOMAD's own apps (8080, 8090, 8100-8500, 9999, 11434).
-
-Data lives in the `nomad-inbox-data` volume:
-- the database
-- `keys/`, which decrypts the stored app password (back it up together with the database)
-- `files/`, the filed attachments
-
-To update to the latest version on GitHub, run the install command again, or do it by hand. Your `.env` and data are kept, and database migrations run automatically on start:
-
-```bash
-cd ~/nomad-inbox && git pull && docker compose up -d --build
-```
-
-**WSL note:** WSL shuts down idle distros, which stops polling. Keep the distro running, for example by starting it at Windows login, or by setting `vmIdleTimeout=-1` under `[wsl2]` in `%UserProfile%\.wslconfig`.
-
-## Develop
-
-```bash
-dotnet tool restore
-dotnet run --project src/NomadInbox.Web     # login admin / admin (appsettings.Development.json)
-dotnet test
-```
-
-Local data goes to `src/NomadInbox.Web/data/`. To add a migration:
-
-```bash
-dotnet ef migrations add <Name> -p src/NomadInbox.Infrastructure -s src/NomadInbox.Web -o Data/Migrations
-```
-
-Migrations are applied automatically at startup.
-
-### Releasing a version
-
-Pull requests build the Docker image and smoke-test it ([workflow](.github/workflows/image.yml)). Tagging `main` publishes it for the Supply Depot:
-
-```bash
-git tag v1.0.5 && git push origin v1.0.5
-```
-
-That publishes `ghcr.io/alonazar/nomad-inbox:1.0.5` and moves `:latest` to it, so **Update (pull latest)** in NOMAD installs it (see [Updating](#updating)). Use the next unused `vX.Y.Z`: NOMAD and the workflow only recognize tags of that form.
-
-The package is public and the repository's workflow can write to it. Should it ever be recreated: make it public (**Packages › nomad-inbox › Package settings › Change visibility**) and give the repository write access there (**Manage Actions access**), or the publish step fails with `permission_denied: write_package`.
-
 ## How it works
 
 Each check has two steps, and both share one schedule ("Check mail now" runs both straight away).
 
-**1. Poll.** NOMAD Inbox connects over IMAPS, opens the folder read-only and fetches the headers of messages newer than the last run. It tracks that position by UID, per folder, together with UIDVALIDITY, and checks the subject prefix itself. It doesn't use IMAP SEARCH for new mail, because Gmail's search index can lag behind delivery, and a message missed that way would be skipped for good. Only the first scan of a folder uses SEARCH, plus the newest 50 messages fetched directly. New matches are de-duplicated by Message-ID and stored as *Pending*. Senders not on the allowlist are stored as *Ignored*. "Rescan the folder from the start" in Settings resets the scan position.
+### 1. Poll
 
-**2. Process.** Pending emails are handled in batches of 25 over a single connection:
+NOMAD Inbox connects over IMAPS, opens the folder read-only and fetches the headers of messages newer than the last run. It tracks that position by UID, per folder, together with UIDVALIDITY, and checks the subject prefix itself. It doesn't use IMAP SEARCH for new mail, because Gmail's search index can lag behind delivery, and a message missed that way would be skipped for good. Only the first scan of a folder uses SEARCH, plus the newest 50 messages fetched directly. New matches are de-duplicated by Message-ID and stored as *Pending*. Senders not on the allowlist are stored as *Ignored*. "Rescan the folder from the start" in Settings resets the scan position.
+
+### 2. Process
+
+Pending emails are handled in batches of 25 over a single connection:
 
 - **Fetch.** Gets the full message by UID, or by Message-ID if the folder's UIDs were reset. It uses `BODY.PEEK`, so mail stays unread.
 - **Body.** Keeps the plain-text body. If there's only HTML, it's converted to text.
@@ -265,19 +63,23 @@ Each check has two steps, and both share one schedule ("Check mail now" runs bot
 
 A failed email shows the reason on its page and has a **Reprocess** button. Ignored emails have **Process anyway**.
 
-**3. Links.** A separate background worker, so slow summaries never hold up mail checks, handles each *Web* link in two steps:
+### 3. Links
+
+A separate background worker, so slow summaries never hold up mail checks, handles each *Web* link in two steps:
 
 - **Fetch.** Downloads the page (up to 10 MB, 45 s timeout). Addresses on your own network (`localhost`, `192.168.x.x`, NOMAD's own services, …) are refused unless **Allow links to local-network addresses** is on in Settings. The check happens when the connection is made, so redirects can't get around it.
 - **Readable text.** For HTML, the article body is extracted the way a browser's Reader View does it, falling back to all visible text for pages that aren't articles. PDFs and plain-text links are read directly. Images, archives and other binary files are *Skipped*.
 - **JavaScript pages.** If an HTML page yields under 500 characters (typical of single-page and WebAssembly apps that only send a loading shell), it's opened in headless Chromium through Playwright:
   - It waits for the network to go quiet and the visible text to stop changing (up to about a minute), then extracts the text again. The version with more text wins.
   - The local-network rule applies to every request the page makes, and images, fonts and media aren't loaded.
-  - It can be turned off in Settings. The browser is installed into the Docker image; for local development, run `dotnet src/NomadInbox.Web/bin/Debug/net10.0/NomadInbox.Web.dll install-browser` once.
+  - It can be turned off in Settings. The browser is part of the Docker image.
 - **Summary.** The text is sent to NOMAD's Ollama with the email's category, tags and title as context. The answer is a bold one-line overview followed by key-point bullets. Pages too long for the context window are condensed part by part, then summarized together.
 
-If Ollama isn't installed, isn't running, or no model is chosen yet, links wait as *Waiting for AI summary* and are summarized once it's available (checked every 2 minutes and whenever Settings are saved). A summary that errors is retried twice, then marked *Failed*. Each link has **Retry** or **Summarize again** on the email's page.
+If Ollama isn't installed, isn't running, or no model is chosen yet, links wait as *Waiting for AI summary* and are summarized once it's available (checked every 2 minutes and whenever Settings are saved). A summary that errors is retried twice, then marked *Failed*. Each link has **Retry** or **Summarize again** on the email's page. To set up the AI, see [AI summaries](README-SETUP.md#ai-summaries).
 
-**4. YouTube.** YouTube links go through the same fetch → summarize steps, using [yt-dlp](https://github.com/yt-dlp/yt-dlp). It's installed in the image and updates itself daily, and uses Playwright's bundled Node.js to solve YouTube's JavaScript challenges.
+### 4. YouTube
+
+YouTube links go through the same fetch → summarize steps, using [yt-dlp](https://github.com/yt-dlp/yt-dlp). It's installed in the image and updates itself daily, and uses Playwright's bundled Node.js to solve YouTube's JavaScript challenges.
 
 - **Videos.** Title, channel, length, publish date, description and chapters, plus a transcript from the captions. The caption track is chosen in this order:
   1. uploaded subtitles in a preferred language (Settings → YouTube, default `en`)
@@ -296,9 +98,11 @@ If Ollama isn't installed, isn't running, or no model is chosen yet, links wait 
   - yt-dlp merges video and audio into one MP4 with ffmpeg.
   - Files go to NOMAD's shared media folder as `/opt/project-nomad/storage/media/youtube/<Channel>/<yyyy-MM-dd> <Title> [<id>].mp4`, next to a `-thumb.jpg` and a `.nfo` file. The `.nfo` holds title, date, channel, category, tags, and the AI summary as the plot.
   - In **Jellyfin**, add a library of type *Movies* pointing at `/media/youtube` and turn off its internet metadata downloaders; it then shows each video with its summary, offline. **File Browser** sees the same files under `media/youtube`.
-  - Videos also play on the email's page. A channel followed from a `#download` email downloads its new videos too. A one-off `nomad-inbox-init` service in `compose.yaml` creates the folder and makes it writable for the app; set `NOMADINBOX_VIDEO_DIR` in `.env` to use another folder.
+  - Videos also play on the email's page. A channel followed from a `#download` email downloads its new videos too. The container creates the folder and makes it writable for the app on start; with install.sh, set `NOMADINBOX_VIDEO_DIR` in `.env` to use another folder.
 
-**5. NOMAD knowledge base.** A background sync puts everything into the knowledge base of NOMAD's AI Assistant, the documents its chat answers from, using the Command Center's API (`/api/rag/...`, no login needed on the local network). What goes in:
+### 5. NOMAD knowledge base
+
+A background sync puts everything into the knowledge base of NOMAD's AI Assistant, the documents its chat answers from, using the Command Center's API (`/api/rag/...`, no login needed on the local network). What goes in:
 
 - **Each summarized link** (web page, video, channel) as a Markdown document: title, source, site or channel, date, length, category and tags, the AI summary, chapters, and the full article or transcript. The full text is what makes answers specific; it can be turned off.
 - **Each stored attachment** NOMAD can read itself (PDF, Word, EPUB, text, images) as the original file. Other files with extracted text (PowerPoint, forwarded emails) go in as Markdown.
@@ -311,7 +115,9 @@ How it's filed and kept in step:
 - **Controls.** **Resend** (per item) and **Resend everything** (Settings) send again. If NOMAD isn't reachable, it simply waits.
 - **Deleting.** **Delete…** on an item's page removes it with its links and attachments, and optionally its files: attachments and saved videos, unless another item uses them. Its documents are removed from NOMAD on the next sync, and its Message-ID is remembered, so a folder rescan or channel check won't bring it back.
 
-**6. Saved pages.** A web link can also get a local copy of the page. This happens for emails tagged `#archive` (**Settings → Saved pages** can switch it to *Always* or *Never*), and anytime through **Save page** on an email's link.
+### 6. Saved pages
+
+A web link can also get a local copy of the page. This happens for emails tagged `#archive` (**Settings → Saved pages** can switch it to *Always* or *Never*), and anytime through **Save page** on an email's link.
 
 - **Content.** The page's main content is extracted the way a browser's Reader View does it, or from a headless-browser render for JavaScript-built pages. Then it's cleaned with an allowlist: paragraphs, headings, **bold**/*italic* and other inline formatting, lists, quotes, code, tables and figures stay; scripts, iframes, forms, inline styles and classes go, so the look comes only from the local stylesheet.
 - **Media.** Images (including lazy-loaded ones and the largest `srcset` size) and linked video files are downloaded within the size limits in Settings. Each is stored once, by content hash, and the page points at the local copy. Anything that couldn't be saved becomes a link to the original.
@@ -324,22 +130,12 @@ How it's filed and kept in step:
   - Links between saved pages are relative, so the folder also works when copied elsewhere and opened in a browser.
   - The images and videos live only here, and the app serves them from here, so nothing is stored twice. `NOMADINBOX_PAGES_DIR` changes the folder.
 
-### Setting up summaries
+## Updating
 
-1. In NOMAD's Command Center, install the **AI Assistant** (it runs Ollama in the `nomad_ollama` container on port 11434).
-2. In the AI Assistant's settings, download a model. On a 16 GB GPU, `gemma3:12b` is a good balance of quality and room for long pages. Smaller GPUs can use `gemma3:4b` or `qwen3:8b`.
-3. In NOMAD Inbox → **Settings → AI summaries**:
-   - leave the address as `http://nomad_ollama:11434`
-   - click **Load models** and choose the model
-   - click **Test the model**, then **Save settings**
+Installed from NOMAD's Supply Depot, use **Manage › Update (pull latest)** on the app's card. NOMAD downloads the image's tag again and restarts the app with your data; if the new version doesn't start, it goes back to the one that was running. Database migrations run on start.
 
-The summary instructions can be changed under **Summary instructions (advanced)**.
+That's why the image is `:latest`: every release publishes `latest` (see [Releasing a version](README-DEV.md#releasing-a-version)), and for custom apps NOMAD's Update only re-downloads the tag the app is set to. With a pinned tag such as `:1.0.4`, Update just fetches 1.0.4 again; to move to another version you'd change the tag in **Manage › Edit**. The **Update available** pill, the version choice and automatic updates are for NOMAD's own catalog apps only, so they don't appear for NOMAD Inbox, and its card shows `latest` instead of a version number.
 
-## Roadmap
+To go back to an older version, set the image to that version's tag in **Manage › Edit**, e.g. `ghcr.io/alonazar/nomad-inbox:1.0.2` ([all versions](https://github.com/alonazar/growmad/pkgs/container/nomad-inbox)). The database isn't migrated back, so only do this between versions with the same database.
 
-1. ~~Skeleton, IMAP ingest, UI, Docker~~
-2. ~~Fetch full messages: file attachments (with de-duplication and text extraction), extract links, label processed mail in Gmail~~
-3. ~~Web links: readable-text extraction and summaries from NOMAD's Ollama~~
-4. ~~YouTube: video transcripts with yt-dlp, channel profiles, following channels~~
-5. ~~Push summaries and documents into NOMAD's knowledge base~~ (optional Kiwix ZIM archives: not done)
-6. Hardening: retries with backoff, backups, OCR for scanned PDFs
+Installed with install.sh, run the install command again; see [Run with install.sh instead](README-SETUP.md#run-with-installsh-instead-ubuntu--wsl2).
