@@ -105,8 +105,9 @@ public sealed class KnowledgeSyncService(
         foreach (var want in desired.Values.OrderBy(d => d.InboxEmailId).ThenBy(d => d.ItemKey))
         {
             sent.TryGetValue(want.ItemKey, out var doc);
-            // Same content already sent. A failure with the same content isn't retried forever: "Resend" clears the hash.
-            if (doc is not null && doc.ContentHash == want.Hash) continue;
+            // Same content under the same name already sent. A failure with the same content isn't retried forever:
+            // "Resend" clears the hash. A new name alone (e.g. a title now sent in plain ASCII) replaces the old copy.
+            if (doc is not null && doc.ContentHash == want.Hash && doc.FileName == want.FileName) continue;
             if (uploaded >= UploadsPerRun) break;
 
             if (doc is null)

@@ -60,6 +60,31 @@ public class KnowledgeDocumentBuilderTests
     };
 
     [Theory]
+    [InlineData("2026-10-21 they’re shutting it DOWN", "2026-10-21 they're shutting it DOWN")]
+    [InlineData("Café – résumé…", "Cafe - resume...")]
+    [InlineData("“Straße” København", "\"Strasse\" Kobenhavn")]
+    [InlineData("日本語 notes.pdf", "___ notes.pdf")]
+    [InlineData("plain-name_1.md", "plain-name_1.md")]
+    public void Names_sent_to_NOMAD_are_plain_ASCII(string name, string expected)
+    {
+        Assert.Equal(expected, KnowledgeDocumentBuilder.AsciiFileName(name));
+    }
+
+    [Fact]
+    public void Link_documents_get_plain_ASCII_names()
+    {
+        var email = Email();
+        var link = Link(LinkStatus.Done);
+        link.Title = "Why they’re naïve about water";
+        email.Links.Add(link);
+
+        var doc = Assert.Single(KnowledgeDocumentBuilder.Build(email, new InboxSettings { OllamaModel = "m" }, Store));
+
+        Assert.Equal("2026-10-21 Why they're naive about water.md", doc.FileName);
+        Assert.All(doc.FileName, c => Assert.True(c < 128));
+    }
+
+    [Theory]
     [InlineData("Survival/Water", true, "Survival")]
     [InlineData(null, true, "nomad inbox")]
     [InlineData("Survival/Water", false, "nomad inbox")]
@@ -250,6 +275,26 @@ public sealed class KnowledgeSyncTests : IAsyncLifetime
         await _sync.RunOnceAsync(default);
 
         Assert.Empty(_nomad.Files);
+    }
+
+    [Fact]
+    public async Task Document_sent_under_a_non_ASCII_name_is_replaced_with_a_plain_one()
+    {
+        await AddEmailWithLinkAsync("Summary", "they’re shutting it DOWN");
+        await _sync.RunOnceAsync(default);
+        await using (var db = await _db.Factory.CreateDbContextAsync()) // as sent before this fix
+            await db.KnowledgeDocuments.ExecuteUpdateAsync(u => u.SetProperty(d => d.FileName, d => d.FileName.Replace("'", "’")));
+        var oldSource = _nomad.Files.Keys.Single();
+
+        var outcome = await _sync.RunOnceAsync(default);
+        var again = await _sync.RunOnceAsync(default);
+
+        Assert.Equal(1, outcome.Uploaded);
+        Assert.Equal(0, again.Uploaded);
+        Assert.DoesNotContain(oldSource, _nomad.Files.Keys);
+        var doc = await SingleDocAsync();
+        Assert.EndsWith(" they're shutting it DOWN.md", doc.FileName);
+        Assert.Single(_nomad.Files);
     }
 
     [Fact]
