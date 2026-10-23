@@ -72,7 +72,7 @@ public static partial class KnowledgeDocumentBuilder
             var extension = Path.GetExtension(file.FileName);
             if (NativeExtensions.Contains(extension) && store.ResolveFullPath(file.StoredPath) is { } path && File.Exists(path))
             {
-                yield return new DesiredDocument($"file:{file.Id}", email.Id, file.FileName, file.ContentType, collection,
+                yield return new DesiredDocument($"file:{file.Id}", email.Id, AsciiFileName(file.FileName), file.ContentType, collection,
                     Hash(Encoding.UTF8.GetBytes(file.Sha256 ?? file.StoredPath), collection), null, path);
             }
             else if (!string.IsNullOrWhiteSpace(file.ExtractedText))
@@ -164,9 +164,36 @@ public static partial class KnowledgeDocumentBuilder
     private static DesiredDocument Text(string key, int emailId, string name, string markdown, string? collection)
     {
         var bytes = Encoding.UTF8.GetBytes(markdown);
-        var fileName = AttachmentStore.SanitizeFileName(name);
+        var fileName = AsciiFileName(AttachmentStore.SanitizeFileName(name));
         if (fileName.Length > 90) fileName = fileName[..90].TrimEnd();
         return new DesiredDocument(key, emailId, fileName + ".md", "text/markdown", collection, Hash(bytes, collection), bytes, null);
+    }
+
+    /// <summary>
+    /// The name to send NOMAD, in plain ASCII: for any other character .NET sends the upload's file name encoded
+    /// (<c>=?utf-8?B?…?=</c>), which NOMAD stores as the name and then loses the extension. Accents are dropped
+    /// (é → e), typographic quotes and dashes become plain ones, anything else becomes '_'.
+    /// </summary>
+    public static string AsciiFileName(string name)
+    {
+        var sb = new StringBuilder(name.Length);
+        foreach (var c in name.Normalize(NormalizationForm.FormD))
+        {
+            if (c < 128) { sb.Append(c); continue; }
+            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark) continue; // the accent of é
+            sb.Append(c switch
+            {
+                '‘' or '’' or '‚' or '′' => "'",
+                '“' or '”' or '„' or '″' or '«' or '»' => "\"",
+                '‐' or '‑' or '‒' or '–' or '—' or '―' or '−' => "-",
+                ' ' or ' ' or ' ' => " ",
+                '…' => "...",
+                'ß' => "ss", 'æ' => "ae", 'Æ' => "AE", 'œ' => "oe", 'Œ' => "OE",
+                'ø' => "o", 'Ø' => "O", 'ł' => "l", 'Ł' => "L",
+                _ => "_",
+            });
+        }
+        return sb.ToString();
     }
 
     private static string DatePrefix(DateTimeOffset date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
