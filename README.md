@@ -141,7 +141,7 @@ NOMAD's Ollama looks at image attachments and at images on saved pages (the firs
 - **Model.** The summary model is used if it can read images (`gemma3:4b` and up can); **Settings → AI summaries → Model for images** picks another one, and **Check** asks Ollama whether a model can read images.
 - **Formats.** JPG, PNG, WebP, GIF and BMP. SVG and HEIC are listed as skipped. Each picture is described once, by content, even when several emails or pages use it.
 - **Where it shows.** Under each image attachment on the email's page (with **Redescribe**), as the alt text of images in saved pages, and in Library search.
-- **Knowledge base.** A described image attachment goes into NOMAD's knowledge base as an *image card* (a Markdown document with all of the above and links to the image and the email) instead of the image file. A saved page's document gets an **Images** section listing its described images.
+- **Knowledge base.** A described image attachment goes into NOMAD's knowledge base as an *image card* (a Markdown document with all of the above and links to the image and the email) instead of the image file. A saved page's document gets an **Images** section listing its described images; it waits until the page's images are described (at most an hour), so NOMAD gets it once instead of again after each image.
 - **Existing images.** Images that arrive after the feature is turned on are described automatically; **Describe existing images** in Settings describes the ones that were already there.
 
 If Ollama isn't running, images wait and are described once it's back. A description that fails is retried twice, then marked failed.

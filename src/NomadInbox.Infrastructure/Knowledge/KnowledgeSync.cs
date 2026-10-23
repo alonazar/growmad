@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using NomadInbox.Core.Domain;
 using NomadInbox.Infrastructure.Data;
 using NomadInbox.Infrastructure.Files;
+using NomadInbox.Infrastructure.Images;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Settings;
 
@@ -71,12 +72,13 @@ public sealed class KnowledgeSyncService(
             .Where(e => e.Status == EmailStatus.Done)
             .Include(e => e.Links).Include(e => e.Attachments).AsSplitQuery()
             .ToListAsync(ct);
-        var images = await db.ImageDescriptions.AsNoTracking()
-            .Where(d => d.Status == ImageDescriptionStatus.Done).ToDictionaryAsync(d => d.ImageKey, ct);
+        var allImages = await db.ImageDescriptions.AsNoTracking().ToDictionaryAsync(d => d.ImageKey, ct);
+        var images = allImages.Values.Where(d => d.Status == ImageDescriptionStatus.Done).ToDictionary(d => d.ImageKey);
         var pages = (await db.Pages.AsNoTracking().Include(p => p.Assets)
                 .Where(p => p.SourceLinkId != null && p.Status == PageStatus.Done).ToListAsync(ct))
             .GroupBy(p => p.SourceLinkId!.Value).ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.Id).First());
         var context = new KnowledgeContext(images, pages);
+        var waitingForImages = LinksWaitingForImages(pages, allImages, settings, DateTimeOffset.UtcNow);
 
         // One item that can't be turned into documents is skipped, not allowed to stop the sync for everything else.
         var skipped = new HashSet<int>();
@@ -115,6 +117,13 @@ public sealed class KnowledgeSyncService(
             // Same content under the same name already sent. A failure with the same content isn't retried forever:
             // "Resend" clears the hash. A new name alone (e.g. a title now sent in plain ASCII) replaces the old copy.
             if (doc is not null && doc.ContentHash == want.Hash && doc.FileName == want.FileName) continue;
+            // A saved page whose images are still being described is sent once they're done, not again for each image.
+            if (want.ItemKey.StartsWith("link:") && int.TryParse(want.ItemKey["link:".Length..], out var linkId) &&
+                waitingForImages.Contains(linkId))
+            {
+                logger.LogDebug("Holding {Key} until its images are described", want.ItemKey);
+                continue;
+            }
             if (uploaded >= UploadsPerRun) break;
 
             if (doc is null)
@@ -176,6 +185,36 @@ public sealed class KnowledgeSyncService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.KnowledgeDocuments.Where(d => d.InboxEmailId == emailId)
             .ExecuteUpdateAsync(u => u.SetProperty(d => d.ContentHash, (string?)null), ct);
+    }
+
+    /// <summary>A page's document is held back at most this long for its image descriptions (e.g. while Ollama is down).</summary>
+    public static readonly TimeSpan MaxImageWait = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Links whose saved page has images that are waiting for a description, or will be queued for one soon, so the
+    /// page's document is sent once with all of them instead of again after each one.
+    /// </summary>
+    public static IReadOnlySet<int> LinksWaitingForImages(IReadOnlyDictionary<int, ArchivedPage> pagesByLink,
+        IReadOnlyDictionary<string, ImageDescription> descriptions, InboxSettings settings, DateTimeOffset now)
+    {
+        var waiting = new HashSet<int>();
+        if (!settings.IsImageAiConfigured) return waiting;
+        var since = now - MaxImageWait;
+
+        foreach (var (linkId, page) in pagesByLink)
+        {
+            var coming = ImageDescriber.PageImages(page, settings).Any(asset =>
+            {
+                var key = Path.GetFileNameWithoutExtension(asset.FileName!);
+                if (descriptions.TryGetValue(key, out var description))
+                    return description.Status == ImageDescriptionStatus.Pending && description.CreatedAt > since;
+                // Not queued yet: the image worker picks it up within minutes if it's in scope and readable.
+                return ImageDescriber.CanRead(asset.FileName!) && page.ArchivedAt > since &&
+                       (settings.DescribeImagesFrom is null || page.ArchivedAt >= settings.DescribeImagesFrom);
+            });
+            if (coming) waiting.Add(linkId);
+        }
+        return waiting;
     }
 
     private async Task<bool> RemoveRemoteAsync(KnowledgeDocument doc, InboxSettings settings,
