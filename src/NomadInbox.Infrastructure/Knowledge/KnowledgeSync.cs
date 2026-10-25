@@ -37,7 +37,7 @@ public sealed class KnowledgeSyncService(
     public async Task<KnowledgeOutcome> RunOnceAsync(CancellationToken ct)
     {
         var settings = await settingsService.GetAsync(ct);
-        if (!settings.KnowledgeBaseEnabled || !await nomad.IsAvailableAsync(settings.NomadUrl, ct))
+        if (!settings.SendsToNomad || !await nomad.IsAvailableAsync(settings.NomadUrl, ct))
             return new KnowledgeOutcome(0, 0, 0, 0);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);

@@ -35,6 +35,7 @@ public sealed class VideoDownloadWorker(
 
     public async Task<bool> DownloadNextAsync(CancellationToken ct)
     {
+        if (!(await settingsService.GetAsync(ct)).UsesInternet) return false; // air-gapped: videos arrive in bundles
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         // Needs the video's metadata (title, channel, date) for the file name, so wait until it has been fetched.
         var link = await db.Links

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NomadInbox.Core.Mail;
 using NomadInbox.Infrastructure.Ai;
+using NomadInbox.Infrastructure.Bundles;
 using NomadInbox.Infrastructure.Web;
 using NomadInbox.Infrastructure.YouTube;
 using NomadInbox.Infrastructure.Data;
@@ -22,7 +23,7 @@ public static class DependencyInjection
     /// <param name="videoDirectory">Where downloaded videos go (NOMAD's shared media folder in production); defaults to data/videos.</param>
     /// <param name="pagesExportDirectory">Saved pages' media and plain-HTML copy (NOMAD's File Browser in production); defaults to data/pages-export.</param>
     public static IServiceCollection AddNomadInbox(this IServiceCollection services, string dataDirectory,
-        string? videoDirectory = null, string? pagesExportDirectory = null)
+        string? videoDirectory = null, string? pagesExportDirectory = null, string? exportDirectory = null, string? importDirectory = null)
     {
         Directory.CreateDirectory(dataDirectory);
 
@@ -84,6 +85,20 @@ public static class DependencyInjection
         services.AddSingleton<PageTrigger>();
         services.AddSingleton<PageService>();
         services.AddHostedService<PageArchiveWorker>();
+
+        // Air-gapped operation: a collector exports bundles, the air-gapped NOMAD imports them.
+        services.AddSingleton(sp => new BundleExporter(
+            sp.GetRequiredService<IDbContextFactory<NomadInboxDbContext>>(), sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<AttachmentStore>(), exportDirectory ?? Path.Combine(dataDirectory, "export"),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BundleExporter>>()));
+        services.AddHostedService<BundleExportWorker>();
+        services.AddSingleton(sp => new BundleImporter(
+            sp.GetRequiredService<IDbContextFactory<NomadInboxDbContext>>(), sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<AttachmentStore>(), sp.GetRequiredService<KnowledgeTrigger>(), sp.GetRequiredService<LinkTrigger>(),
+            sp.GetRequiredService<ImageTrigger>(), importDirectory ?? Path.Combine(dataDirectory, "import"),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BundleImporter>>()));
+        services.AddSingleton<BundleImportWorker>();
+        services.AddHostedService(sp => sp.GetRequiredService<BundleImportWorker>());
 
         // Image descriptions for the knowledge base (NOMAD's Ollama, with a model that can read images).
         services.AddSingleton<ImageDescriber>();

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NomadInbox.Infrastructure.Settings;
 
 namespace NomadInbox.Infrastructure.YouTube;
 
@@ -7,7 +8,7 @@ namespace NomadInbox.Infrastructure.YouTube;
 /// YouTube changes often and old yt-dlp versions stop working, so the standalone binary in the image updates
 /// itself (<c>yt-dlp -U</c>) at startup and once a day. Elsewhere (a system package) it only logs the version.
 /// </summary>
-public sealed class YtDlpMaintenance(YtDlp ytDlp, ILogger<YtDlpMaintenance> logger) : BackgroundService
+public sealed class YtDlpMaintenance(YtDlp ytDlp, SettingsService settingsService, ILogger<YtDlpMaintenance> logger) : BackgroundService
 {
     public static string? Version { get; private set; }
 
@@ -18,7 +19,8 @@ public sealed class YtDlpMaintenance(YtDlp ytDlp, ILogger<YtDlpMaintenance> logg
         {
             try
             {
-                if (ytDlp.Executable == YtDlp.ImagePath)
+                // Air-gapped there is no internet to update from; the version in the image is used as is.
+                if (ytDlp.Executable == YtDlp.ImagePath && (await settingsService.GetAsync(stoppingToken)).UsesInternet)
                 {
                     var update = await ytDlp.RunAsync(["-U"], null, TimeSpan.FromMinutes(3), stoppingToken);
                     var summary = update.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault();

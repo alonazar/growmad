@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 # NOMAD Inbox
 .env
 src/NomadInbox.Web/data/
+
+# Collector bundles (compose.yaml maps ./export)
+/export/

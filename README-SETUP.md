@@ -7,6 +7,7 @@ How to install NOMAD Inbox on a [Project NOMAD](https://github.com/Crosstalk-Sol
 - [AI summaries](#ai-summaries)
 - [Move an install made with install.sh](#move-an-install-made-with-installsh)
 - [Run with install.sh instead](#run-with-installsh-instead-ubuntu--wsl2)
+- [Air-gapped NOMAD: a collector and bundles](#air-gapped-nomad-a-collector-and-bundles)
 
 ## Install from NOMAD's Supply Depot (recommended)
 
@@ -178,3 +179,38 @@ cd ~/nomad-inbox && git pull && docker compose up -d --build
 ```
 
 **WSL note:** WSL shuts down idle distros, which stops polling. Keep the distro running, for example by starting it at Windows login, or by setting `vmIdleTimeout=-1` under `[wsl2]` in `%UserProfile%\.wslconfig`.
+
+## Air-gapped NOMAD: a collector and bundles
+
+For a NOMAD without internet. NOMAD Inbox then runs twice:
+
+- a **collector** on any wired machine (no NOMAD needed): it checks Gmail, fetches pages and transcripts, and writes **bundles** (ZIP files);
+- NOMAD Inbox on the **air-gapped NOMAD**: it imports the bundles you carry over on a USB drive, then summarizes what the collector didn't and fills NOMAD's knowledge base as usual.
+
+Where the AI runs: if the collector has an AI set up (**Settings → AI summaries**, e.g. NOMAD's AI Assistant next to it), links are summarized and images described there, and bundles carry the results. Otherwise the air-gapped NOMAD's AI does it after the import.
+
+### The collector
+
+1. Install with [install.sh](#run-with-installsh-instead-ubuntu--wsl2) on the wired machine and do the [Gmail setup](#gmail-setup).
+2. **Settings → Mode → Collector**. Give it a name (shown on the air-gapped side), how often to write a bundle (every 24 hours by default; 0 = only by hand), and how long an item waits for the collector's AI.
+3. Bundles appear on the **Export** page (download them there) and in `~/nomad-inbox/export`. **Create bundle now** writes one straight away. Each bundle holds only items that are new or changed since the last one.
+
+### The air-gapped NOMAD
+
+1. **Bring the image.** The air-gapped NOMAD can't download it, so save it on a wired machine and load it there:
+   ```bash
+   docker pull ghcr.io/alonazar/nomad-inbox:1.0.11
+   docker save ghcr.io/alonazar/nomad-inbox:1.0.11 | gzip > nomad-inbox-1.0.11.tar.gz   # copy this to the USB drive
+   ```
+   On the NOMAD host: `gunzip -c nomad-inbox-1.0.11.tar.gz | docker load`. Use the version you want instead of `1.0.11`.
+2. [Add the custom app](#install-from-nomads-supply-depot-recommended) as usual, but with that version as the image (e.g. `ghcr.io/alonazar/nomad-inbox:1.0.11`, not `:latest`): NOMAD finds it locally and doesn't try to download it.
+3. Open it, **Settings → Mode → Air-gapped**, and set up [AI summaries](#ai-summaries). No Gmail setup is needed.
+4. To import, open **Import**, choose the bundle files from the USB drive, and click **Import**.
+   - Importing the same bundle twice, or bundles out of order, is fine; a newer copy of an item is never replaced by an older one.
+   - Items you delete here stay deleted, even when a later bundle carries them again.
+   - A bundle that isn't complete or was changed is rejected, with the reason on the Import page.
+5. **Optional, a watched folder:** in **Manage › Edit**, add the volume `/opt/project-nomad/storage/filebrowser/files/nomad-inbox-import` → `/import` and the environment variable `NomadInbox__ImportDirectory=/import`, then turn on **Settings → Mode → Also import bundles placed in the import folder**. Bundles copied into `nomad-inbox-import` in NOMAD's File Browser are imported within a minute and moved to `imported` (or `rejected`).
+
+**Updating** the air-gapped NOMAD Inbox works the same way: `docker load` the new version, then change the image tag in **Manage › Edit**. (**Update (pull latest)** needs the internet.)
+
+Bundles aren't signed yet; signing, saved pages and videos in bundles come next.

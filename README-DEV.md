@@ -17,7 +17,7 @@ The stack, the project's status, and how to build, test and release it. For what
 - **Phase 4:** YouTube videos are summarized from their transcripts, channels and playlists get a profile, and followed channels add their new videos automatically.
 - **Phase 5:** everything goes into the knowledge base of NOMAD's AI Assistant, so you can ask about it in NOMAD's chat; items can be deleted.
 - **Saved pages:** local copies of web pages (content with its formatting, images, videos and links), read in the **Library** through an editable template, and copied as plain HTML into NOMAD's File Browser.
-- **Since then:** style skins (Settings → Appearance), installing from NOMAD's Supply Depot, and the attachment filter (Settings → Attachments).
+- **Since then:** style skins (Settings → Appearance), installing from NOMAD's Supply Depot, the attachment filter (Settings → Attachments), image descriptions, and air-gapped operation, step 1 (Collector and Air-gapped modes, bundles of items and attachments; saved pages, videos and signing come next).
 
 Hardening comes next (see [Roadmap](#roadmap)).
 

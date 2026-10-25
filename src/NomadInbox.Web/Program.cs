@@ -36,9 +36,13 @@ var dataDirectory = Path.GetFullPath(string.IsNullOrWhiteSpace(configuredDataDir
     : configuredDataDirectory);
 var videoDirectory = builder.Configuration["NomadInbox:VideoDirectory"];
 var pagesDirectory = builder.Configuration["NomadInbox:PagesExportDirectory"];
+var exportDirectory = builder.Configuration["NomadInbox:ExportDirectory"];
+var importDirectory = builder.Configuration["NomadInbox:ImportDirectory"];
 builder.Services.AddNomadInbox(dataDirectory,
     string.IsNullOrWhiteSpace(videoDirectory) ? null : videoDirectory,
-    string.IsNullOrWhiteSpace(pagesDirectory) ? null : pagesDirectory);
+    string.IsNullOrWhiteSpace(pagesDirectory) ? null : pagesDirectory,
+    string.IsNullOrWhiteSpace(exportDirectory) ? null : exportDirectory,
+    string.IsNullOrWhiteSpace(importDirectory) ? null : importDirectory);
 
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.Section));
 builder.Services.AddSingleton<AdminCredentialValidator>();
@@ -242,6 +246,7 @@ app.MapPost("/channels/{id:int}/{mode:regex(^(check|toggle|delete)$)}", async (i
 }).RequireAuthorization().DisableAntiforgery(); // validated explicitly above
 
 app.MapPageEndpoints();
+app.MapBundleEndpoints();
 
 // Every page requires sign-in unless it opts out with [AllowAnonymous] (login, error, not found).
 app.MapRazorComponents<App>()

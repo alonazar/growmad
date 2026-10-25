@@ -128,6 +128,24 @@ public class InboxSettings
     public string Skin { get; set; } = SkinCatalog.DefaultId;
     public ColorMode ColorMode { get; set; } = ColorMode.System;
 
+    // Air-gapped operation: a collector exports bundles, the air-gapped NOMAD imports them.
+    public AppMode Mode { get; set; } = AppMode.Connected;
+    /// <summary>Collector: the name shown for its bundles on the air-gapped side.</summary>
+    public string CollectorName { get; set; } = "collector";
+    /// <summary>Collector: a random id in every bundle, set on the first export.</summary>
+    public string? CollectorId { get; set; }
+    /// <summary>Collector: create a bundle every this many hours when there's something new; 0 only by hand.</summary>
+    public int AutoExportHours { get; set; } = 24;
+    /// <summary>Collector with an AI: an item waits at most this long for its summaries before it's exported without them.</summary>
+    public int ExportAiWaitHours { get; set; } = 6;
+    /// <summary>Air-gapped: import bundles placed in the import folder, not only ones uploaded on the Import page.</summary>
+    public bool WatchImportFolder { get; set; }
+
+    /// <summary>Checks mail and fetches pages, videos and channels (everything except the air-gapped mode).</summary>
+    public bool UsesInternet => Mode != AppMode.AirGapped;
+    /// <summary>Sends to NOMAD's knowledge base (a collector exports bundles instead).</summary>
+    public bool SendsToNomad => KnowledgeBaseEnabled && Mode != AppMode.Collector;
+
     public bool IsAiConfigured =>
         SummariesEnabled && !string.IsNullOrWhiteSpace(OllamaUrl) && !string.IsNullOrWhiteSpace(OllamaModel);
 

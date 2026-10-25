@@ -16,7 +16,7 @@ and NOMAD Inbox records it, indexes it by the subject line, files its attachment
 
 - [Subject syntax](#subject-syntax)
 - [How it works](#how-it-works)
-  1. [Poll](#1-poll) · 2. [Process](#2-process) · 3. [Links](#3-links) · 4. [YouTube](#4-youtube) · 5. [NOMAD knowledge base](#5-nomad-knowledge-base) · 6. [Saved pages](#6-saved-pages) · 7. [Image descriptions](#7-image-descriptions)
+  1. [Poll](#1-poll) · 2. [Process](#2-process) · 3. [Links](#3-links) · 4. [YouTube](#4-youtube) · 5. [NOMAD knowledge base](#5-nomad-knowledge-base) · 6. [Saved pages](#6-saved-pages) · 7. [Image descriptions](#7-image-descriptions) · 8. [Air-gapped operation](#8-air-gapped-operation)
 - [Updating](#updating)
 - [Setup](README-SETUP.md): [Supply Depot install](README-SETUP.md#install-from-nomads-supply-depot-recommended) · [Gmail](README-SETUP.md#gmail-setup) · [AI summaries](README-SETUP.md#ai-summaries) · [Moving an install.sh install](README-SETUP.md#move-an-install-made-with-installsh) · [install.sh](README-SETUP.md#run-with-installsh-instead-ubuntu--wsl2)
 - [Development](README-DEV.md): [Status](README-DEV.md#status) · [Stack](README-DEV.md#stack) · [Develop](README-DEV.md#develop) · [Releasing a version](README-DEV.md#releasing-a-version) · [Roadmap](README-DEV.md#roadmap)
@@ -145,6 +145,15 @@ NOMAD's Ollama looks at image attachments and at images on saved pages (the firs
 - **Existing images.** Images that arrive after the feature is turned on are described automatically; **Describe existing images** in Settings describes the ones that were already there.
 
 If Ollama isn't running, images wait and are described once it's back. A description that fails is retried twice, then marked failed.
+
+### 8. Air-gapped operation
+
+For a NOMAD without internet, **Settings → Mode** splits the work over two machines (set-up: [Air-gapped NOMAD](README-SETUP.md#air-gapped-nomad-a-collector-and-bundles)):
+
+- **Collector** (a wired machine): checks mail and fetches everything as above, but instead of sending to NOMAD it writes **bundles**: ZIP files with each new or changed item (its links with text, transcripts and any summaries, its attachments and image descriptions) and a manifest with a checksum for every file. Bundles are written on a schedule or with **Create bundle now**, and listed on the **Export** page. With an AI set up, an item waits for its summaries (up to a few hours) before it goes into a bundle.
+- **Air-gapped** (the NOMAD): doesn't check mail or fetch anything. Bundles are imported on the **Import** page (or from a watched folder) after checking every file against the manifest; then this side's AI summarizes and describes whatever the collector didn't, and the items go to NOMAD's knowledge base like any others. Imports are idempotent and order-independent, and items deleted on this side stay deleted.
+
+Not in bundles yet: saved pages and downloaded videos. Bundles aren't signed yet.
 
 ## Updating
 

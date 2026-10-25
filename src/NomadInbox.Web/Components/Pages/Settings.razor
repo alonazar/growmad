@@ -15,6 +15,7 @@
 @inject NomadInbox.Infrastructure.Images.ImageTrigger ImageTrigger
 @inject IDbContextFactory<NomadInboxDbContext> DbFactory
 @inject NavigationManager Navigation
+@inject NomadInbox.Infrastructure.Bundles.BundleImporter Importer
 @using NomadInbox.Infrastructure.Ai
 
 <PageTitle>Settings · NOMAD Inbox</PageTitle>
@@ -34,6 +35,56 @@
 
     <div class="row g-4">
         <div class="col-xl-7">
+            <section class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5">Mode</h2>
+                    <InputSelect id="mode" class="form-select mb-2" @bind-Value="form.Mode">
+                        <option value="@AppMode.Connected">Connected: next to NOMAD (checks mail, sends to NOMAD's knowledge base)</option>
+                        <option value="@AppMode.Collector">Collector: a wired machine without NOMAD (checks mail, exports bundles)</option>
+                        <option value="@AppMode.AirGapped">Air-gapped: the NOMAD without internet (imports bundles)</option>
+                    </InputSelect>
+                    @switch (form.Mode)
+                    {
+                        case AppMode.Collector:
+                            <div class="form-text mb-3">
+                                Everything that needs the internet happens here; the results go into bundles (ZIP files) on the <a href="export">Export</a> page,
+                                to carry to the air-gapped NOMAD on a USB drive. Nothing is sent to a knowledge base from here.
+                                With an AI set up below, links are summarized and images described here; otherwise the air-gapped NOMAD does it.
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-5">
+                                    <label class="form-label" for="collectorName">Collector name</label>
+                                    <InputText id="collectorName" class="form-control" @bind-Value="form.CollectorName" />
+                                    <ValidationMessage For="() => form.CollectorName" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="autoExport">Bundle every (hours)</label>
+                                    <InputNumber id="autoExport" class="form-control" @bind-Value="form.AutoExportHours" />
+                                    <ValidationMessage For="() => form.AutoExportHours" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="aiWait">Wait for the AI (hours)</label>
+                                    <InputNumber id="aiWait" class="form-control" @bind-Value="form.ExportAiWaitHours" />
+                                    <ValidationMessage For="() => form.ExportAiWaitHours" />
+                                </div>
+                            </div>
+                            <div class="form-text">0 hours = bundles only with <strong>Create bundle now</strong>. An item goes into a bundle once its links are fetched, and, with an AI here, summarized, or after the wait.</div>
+                            break;
+                        case AppMode.AirGapped:
+                            <div class="form-text mb-2">
+                                No mail checks and nothing fetched from the internet: items arrive in bundles on the <a href="import">Import</a> page,
+                                are summarized here if the collector had no AI, and go to NOMAD's knowledge base as usual.
+                            </div>
+                            <div class="form-check form-switch">
+                                <InputCheckbox id="watch" class="form-check-input" @bind-Value="form.WatchImportFolder" />
+                                <label class="form-check-label" for="watch">Also import bundles placed in the import folder</label>
+                            </div>
+                            <div class="form-text">The folder is <code>@Importer.ImportDirectory</code>; see README-SETUP for showing it in NOMAD's File Browser.</div>
+                            break;
+                    }
+                </div>
+            </section>
+
             <section class="card mb-4">
                 <div class="card-body">
                     <h2 class="h5">Gmail account (IMAP)</h2>
@@ -659,12 +710,16 @@
         {
             // Start from what's saved now, so settings this form doesn't show (the saved-page template and stylesheet,
             // or anything changed elsewhere since the page opened) are kept.
-            stored = form!.ApplyTo(await SettingsService.GetAsync());
+            var before = await SettingsService.GetAsync();
+            var modeChanged = before.Mode != form!.Mode;
+            stored = form.ApplyTo(before);
             await SettingsService.SaveAsync(stored, form.NewPassword);
             hasSavedPassword = !string.IsNullOrEmpty(stored.ProtectedPassword);
             form.NewPassword = null;
             saveMessage = $"Saved at {DateTime.Now:HH:mm:ss}.";
             dirty = false;
+            // The menu (Export / Import) follows the mode; it's drawn once per page load.
+            if (modeChanged) Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
         }
         finally
         {
@@ -695,11 +750,11 @@
         editContext!.NotifyFieldChanged(editContext.Field(nameof(SettingsForm.AllowedAttachmentKinds)));
     }
 
-    private sealed class SettingsForm
+    private sealed class SettingsForm : IValidatableObject
     {
         [Required] public string ImapHost { get; set; } = "";
         [Range(1, 65535)] public int ImapPort { get; set; }
-        [Required, Display(Name = "Email address")] public string Username { get; set; } = "";
+        [Display(Name = "Email address")] public string Username { get; set; } = "";
         public string? NewPassword { get; set; }
         [Required] public string Folder { get; set; } = "";
         [Required, Display(Name = "Subject prefix")] public string SubjectPrefix { get; set; } = "";
@@ -737,6 +792,11 @@
         public string? VisionModel { get; set; }
         [Range(0, 100, ErrorMessage = "Choose between 0 and 100.")] public int MaxImagesPerPage { get; set; }
         [Url(ErrorMessage = "Enter a full address, e.g. http://localhost:8601.")] public string? PublicBaseUrl { get; set; }
+        public AppMode Mode { get; set; }
+        [Required, Display(Name = "Collector name")] public string CollectorName { get; set; } = "";
+        [Range(0, 720, ErrorMessage = "Choose between 0 and 720 hours.")] public int AutoExportHours { get; set; }
+        [Range(0, 168, ErrorMessage = "Choose between 0 and 168 hours.")] public int ExportAiWaitHours { get; set; }
+        public bool WatchImportFolder { get; set; }
 
         public static SettingsForm From(InboxSettings s) => new()
         {
@@ -752,6 +812,8 @@
             SummaryPrompt = s.SummaryPrompt,
             DescribeImages = s.DescribeImages, VisionModel = s.VisionModel, MaxImagesPerPage = s.MaxImagesPerPage,
             PublicBaseUrl = s.PublicBaseUrl,
+            Mode = s.Mode, CollectorName = s.CollectorName, AutoExportHours = s.AutoExportHours, ExportAiWaitHours = s.ExportAiWaitHours,
+            WatchImportFolder = s.WatchImportFolder,
             ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username, Folder = s.Folder,
             SubjectPrefix = s.SubjectPrefix, AllowedSenders = s.AllowedSenders,
             ImportSince = s.ImportSince?.LocalDateTime.Date,
@@ -759,6 +821,13 @@
             ApplyLabels = s.ApplyLabels, ProcessedLabel = s.ProcessedLabel, FailedLabel = s.FailedLabel,
             MaxAttachmentMegabytes = s.MaxAttachmentMegabytes, AllowedAttachmentKinds = s.AllowedAttachmentKinds,
         };
+
+        // The Gmail address is needed only where mail is checked; the air-gapped NOMAD gets everything in bundles.
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (Mode != AppMode.AirGapped && string.IsNullOrWhiteSpace(Username))
+                yield return new ValidationResult("The Email address field is required.", [nameof(Username)]);
+        }
 
         public InboxSettings ApplyTo(InboxSettings s)
         {
@@ -801,6 +870,11 @@
             s.VisionModel = string.IsNullOrWhiteSpace(VisionModel) ? null : VisionModel.Trim();
             s.MaxImagesPerPage = MaxImagesPerPage;
             s.PublicBaseUrl = string.IsNullOrWhiteSpace(PublicBaseUrl) ? null : PublicBaseUrl.Trim().TrimEnd('/');
+            s.Mode = Mode;
+            s.CollectorName = CollectorName.Trim();
+            s.AutoExportHours = AutoExportHours;
+            s.ExportAiWaitHours = ExportAiWaitHours;
+            s.WatchImportFolder = WatchImportFolder;
             return s;
         }
     }

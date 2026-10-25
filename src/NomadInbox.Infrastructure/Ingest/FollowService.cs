@@ -143,7 +143,7 @@ public sealed class FollowWorker(FollowService follows, SettingsService settings
             try
             {
                 var settings = await settingsService.GetAsync(stoppingToken);
-                await follows.CheckDueAsync(settings.FollowCheckHours, stoppingToken);
+                if (settings.UsesInternet) await follows.CheckDueAsync(settings.FollowCheckHours, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
