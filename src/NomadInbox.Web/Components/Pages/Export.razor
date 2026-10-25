@@ -1,0 +1,102 @@
+@page "/export"
+@using NomadInbox.Infrastructure.Bundles
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+@inject SettingsService SettingsService
+@inject BundleExporter Exporter
+
+<PageTitle>Export · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-2">Export bundles</h1>
+<p class="text-muted">
+    Bundles carry new and changed items to an air-gapped NOMAD: copy them to a USB drive and import them there on the
+    <strong>Import</strong> page. Each bundle holds only what's new since the last one.
+</p>
+
+@if (Message is not null)
+{
+    <div class="alert alert-info py-2">@Message</div>
+}
+
+@if (settings is null)
+{
+    return;
+}
+
+@if (settings.Mode != AppMode.Collector)
+{
+    <div class="alert alert-secondary">
+        This NOMAD Inbox is in <strong>@settings.Mode</strong> mode. Bundles are exported in <strong>Collector</strong> mode
+        (<a href="settings">Settings → Mode</a>).
+    </div>
+}
+else
+{
+    <section class="card mb-4">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <form method="post" action="export/create">
+                <AntiforgeryToken />
+                <button type="submit" class="btn btn-primary">Create bundle now</button>
+            </form>
+            <span class="small text-muted">
+                @(settings.AutoExportHours > 0 ? $"Also created automatically every {settings.AutoExportHours} hours when there's something new." : "Automatic bundles are off.")
+                @(settings.IsAiConfigured
+                    ? $" This collector has an AI: items wait up to {settings.ExportAiWaitHours} hours for their summaries."
+                    : " No AI here: the air-gapped NOMAD writes the summaries.")
+            </span>
+        </div>
+        <div class="card-footer small text-muted">Bundles are saved in <code>@Exporter.ExportDirectory</code> on the server; download them below.</div>
+    </section>
+}
+
+<section class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5">Bundles</h2>
+        @if (bundles.Count == 0)
+        {
+            <p class="text-muted mb-0">No bundles yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>#</th><th>Created</th><th>Items</th><th>Size</th><th>File</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in bundles)
+                        {
+                            <tr>
+                                <td>@b.Number</td>
+                                <td class="text-nowrap" title="@Display.Local(b.CreatedAt)">@Display.Ago(b.CreatedAt)</td>
+                                <td>@b.Items</td>
+                                <td class="text-nowrap">@Display.Size(b.Bytes)</td>
+                                <td class="text-break">
+                                    @if (File.Exists(Path.Combine(Exporter.ExportDirectory, b.FileName)))
+                                    {
+                                        <a href="export/files/@b.FileName">@b.FileName</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">@b.FileName (removed)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery] private string? Message { get; set; }
+
+    private InboxSettings? settings;
+    private List<ExportedBundle> bundles = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await SettingsService.GetAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        bundles = await db.ExportedBundles.AsNoTracking().OrderByDescending(b => b.Number).ToListAsync();
+    }
+}

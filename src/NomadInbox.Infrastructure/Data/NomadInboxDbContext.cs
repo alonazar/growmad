@@ -14,6 +14,10 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
     public DbSet<FollowedChannel> FollowedChannels => Set<FollowedChannel>();
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
     public DbSet<ImageDescription> ImageDescriptions => Set<ImageDescription>();
+    public DbSet<ExportedBundle> ExportedBundles => Set<ExportedBundle>();
+    public DbSet<ExportedItem> ExportedItems => Set<ExportedItem>();
+    public DbSet<ImportedBundle> ImportedBundles => Set<ImportedBundle>();
+    public DbSet<ImportedItem> ImportedItems => Set<ImportedItem>();
     public DbSet<DeletedMessage> DeletedMessages => Set<DeletedMessage>();
     public DbSet<ArchivedPage> Pages => Set<ArchivedPage>();
     public DbSet<PageAsset> PageAssets => Set<PageAsset>();
@@ -61,6 +65,19 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
 
         model.Entity<FollowedChannel>(e => e.HasIndex(x => x.ChannelId).IsUnique());
 
+        model.Entity<ExportedBundle>(e =>
+        {
+            e.HasKey(x => x.Number);
+            e.Property(x => x.Number).ValueGeneratedNever(); // bundle numbers are counted by the exporter
+        });
+        model.Entity<ExportedItem>(e => e.HasKey(x => x.MessageId));
+        model.Entity<ImportedBundle>(e =>
+        {
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => new { x.CollectorId, x.Number });
+        });
+        model.Entity<ImportedItem>(e => e.HasKey(x => x.MessageId));
+
         model.Entity<ImageDescription>(e =>
         {
             e.HasKey(x => x.ImageKey);
@@ -104,6 +121,9 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
             e.Ignore(x => x.TranscriptLanguageList);
             e.Ignore(x => x.ImageModel);
             e.Ignore(x => x.IsImageAiConfigured);
+            e.Ignore(x => x.UsesInternet);
+            e.Ignore(x => x.SendsToNomad);
+            e.Property(x => x.Mode).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.VideoDownloadMode).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.PageArchiveMode).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Skin).HasMaxLength(40);

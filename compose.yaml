@@ -10,6 +10,8 @@ services:
       Auth__Username: ${NOMADINBOX_ADMIN_USER:-admin}
       Auth__Password: ${NOMADINBOX_ADMIN_PASSWORD:?Set NOMADINBOX_ADMIN_PASSWORD in .env}
       TZ: ${TZ:-UTC}
+      # Collector mode: bundles for the air-gapped NOMAD are written here (the "export" folder next to compose.yaml).
+      NomadInbox__ExportDirectory: /export
     volumes:
       # SQLite database + encryption keys for the stored app password. Back this up.
       - nomad-inbox-data:/data
@@ -17,6 +19,8 @@ services:
       - ${NOMADINBOX_VIDEO_DIR:-/opt/project-nomad/storage/media/youtube}:/videos
       # Saved pages: their images and videos, plus a plain-HTML copy, in NOMAD's File Browser ("nomad-inbox-pages").
       - ${NOMADINBOX_PAGES_DIR:-/opt/project-nomad/storage/filebrowser/files/nomad-inbox-pages}:/pages-export
+      # Bundles (Collector mode), to copy to a USB drive.
+      - ${NOMADINBOX_EXPORT_DIR:-./export}:/export
     extra_hosts:
       # NOMAD's Ollama (port 11434) and Command Center (port 8080), published on the host. The default addresses
       # use their container names, which also work when NOMAD runs this app itself (Supply Depot, on NOMAD's network).

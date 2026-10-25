@@ -146,6 +146,7 @@ public sealed class PageService(
     public async Task<bool> ArchiveNextAsync(CancellationToken ct)
     {
         var settings = await settingsService.GetAsync(ct);
+        if (!settings.UsesInternet) return false; // air-gapped: saved pages arrive in bundles
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         // Anything left "Saving" was interrupted by a restart.
         await db.Pages.Where(p => p.Status == PageStatus.Saving)

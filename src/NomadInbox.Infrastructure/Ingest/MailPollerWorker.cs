@@ -28,7 +28,11 @@ public sealed class MailPollerWorker(
                 var settings = await settingsService.GetAsync(stoppingToken);
                 var wait = Timeout.InfiniteTimeSpan;
 
-                if (!settings.IsMailConfigured)
+                if (!settings.UsesInternet)
+                {
+                    status.Update(s => s with { State = PollerState.Disabled, NextRunAt = null }); // air-gapped: mail arrives in bundles
+                }
+                else if (!settings.IsMailConfigured)
                 {
                     status.Update(s => s with { State = PollerState.NotConfigured, NextRunAt = null });
                 }

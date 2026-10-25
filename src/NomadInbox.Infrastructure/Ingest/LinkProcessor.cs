@@ -51,7 +51,8 @@ public sealed class LinkProcessor(
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             var youTubeEnabled = youTube is not null;
-            var toFetch = await db.Links
+            // Air-gapped: nothing can be fetched; imported links arrive fetched and only need summaries.
+            var toFetch = !settings.UsesInternet ? [] : await db.Links
                 .Where(l => l.Status == LinkStatus.Pending && (l.Kind == LinkKind.Web || youTubeEnabled))
                 .OrderBy(l => l.Id).Take(FetchBatch).ToListAsync(ct);
             var emails = await EmailsForAsync(db, toFetch, ct);

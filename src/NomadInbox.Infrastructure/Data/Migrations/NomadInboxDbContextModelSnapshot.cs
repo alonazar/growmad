@@ -258,6 +258,49 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.ToTable("Links");
                 });
 
+            modelBuilder.Entity("NomadInbox.Core.Domain.ExportedBundle", b =>
+                {
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Items")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Number");
+
+                    b.ToTable("ExportedBundles");
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.ExportedItem", b =>
+                {
+                    b.Property<string>("MessageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BundleNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExportedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MessageId");
+
+                    b.ToTable("ExportedItems");
+                });
+
             modelBuilder.Entity("NomadInbox.Core.Domain.FollowedChannel", b =>
                 {
                     b.Property<int>("Id")
@@ -363,6 +406,73 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("ImageDescriptions");
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.ImportedBundle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CollectorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CollectorName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ImportedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Items")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Skipped")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectorId", "Number");
+
+                    b.ToTable("ImportedBundles");
+                });
+
+            modelBuilder.Entity("NomadInbox.Core.Domain.ImportedItem", b =>
+                {
+                    b.Property<string>("MessageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BundleNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CollectorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ImportedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MessageId");
+
+                    b.ToTable("ImportedItems");
                 });
 
             modelBuilder.Entity("NomadInbox.Core.Domain.InboxEmail", b =>
@@ -483,6 +593,16 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<bool>("ApplyLabels")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("AutoExportHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CollectorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CollectorName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ColorMode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -492,6 +612,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("DescribeImagesFrom")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ExportAiWaitHours")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("FailedLabel")
@@ -545,6 +668,11 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 
                     b.Property<int>("MaxVideoMegabytes")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("NomadUrl")
                         .IsRequired()
@@ -624,6 +752,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
 
                     b.Property<string>("VisionModel")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("WatchImportFolder")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

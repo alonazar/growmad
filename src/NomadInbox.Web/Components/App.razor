@@ -27,7 +27,9 @@
 
 <body>
     <CascadingValue Value="appearance" IsFixed="true">
-        <Routes />
+        <CascadingValue Value="mode" Name="AppMode" IsFixed="true">
+            <Routes />
+        </CascadingValue>
     </CascadingValue>
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
@@ -37,6 +39,7 @@
 
 @code {
     private UiAppearance appearance = new(SkinCatalog.Get(null), ColorMode.System);
+    private AppMode mode;
 
     protected override async Task OnInitializedAsync()
     {
@@ -44,6 +47,7 @@
         {
             var settings = await SettingsService.GetAsync();
             appearance = new(SkinCatalog.Get(settings.Skin), settings.ColorMode);
+            mode = settings.Mode;
         }
         catch (Exception)
         {

@@ -5,7 +5,10 @@
 set -eu
 
 if [ "$(id -u)" = 0 ]; then
-    for dir in "$NomadInbox__DataDirectory" "$NomadInbox__VideoDirectory" "$NomadInbox__PagesExportDirectory"; do
+    # The bundle folders are optional (they default to folders inside the data folder).
+    for dir in "$NomadInbox__DataDirectory" "$NomadInbox__VideoDirectory" "$NomadInbox__PagesExportDirectory" \
+               "${NomadInbox__ExportDirectory:-}" "${NomadInbox__ImportDirectory:-}"; do
+        [ -n "$dir" ] || continue
         mkdir -p "$dir"
         chown "$APP_UID" "$dir"
     done

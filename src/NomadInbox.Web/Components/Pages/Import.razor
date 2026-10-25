@@ -1,0 +1,119 @@
+@page "/import"
+@using NomadInbox.Infrastructure.Bundles
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+@inject SettingsService SettingsService
+@inject BundleImporter Importer
+
+<PageTitle>Import · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-2">Import bundles</h1>
+<p class="text-muted">
+    Bundles from the collector bring new and changed items. After an import, items are summarized here if the collector
+    had no AI, and sent to NOMAD's knowledge base as usual. Importing the same bundle twice, or bundles out of order, is fine.
+</p>
+
+@if (Message is not null)
+{
+    <div class="alert alert-info py-2 text-break">@Message</div>
+}
+
+@if (settings is null)
+{
+    return;
+}
+
+@if (settings.Mode != AppMode.AirGapped)
+{
+    <div class="alert alert-secondary">
+        This NOMAD Inbox is in <strong>@settings.Mode</strong> mode. Bundles are imported in <strong>Air-gapped</strong> mode
+        (<a href="settings">Settings → Mode</a>).
+    </div>
+}
+else
+{
+    <section class="card mb-4">
+        <div class="card-body">
+            <form method="post" action="import/upload" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2">
+                <AntiforgeryToken />
+                <input type="file" name="bundles" class="form-control w-auto" accept=".zip" multiple required />
+                <button type="submit" class="btn btn-primary">Import</button>
+            </form>
+            <div class="form-text">Plug the USB drive into this computer and choose the bundle files (<code>nomad-inbox-….zip</code>). Large bundles take a moment to upload.</div>
+        </div>
+        <div class="card-footer small text-muted">
+            @if (settings.WatchImportFolder)
+            {
+                <span>Also imported automatically: bundles placed in <code>@Importer.ImportDirectory</code> (checked every minute, then moved to <code>imported</code> or <code>rejected</code>).</span>
+            }
+            else
+            {
+                <span>Importing from a folder is off (<a href="settings">Settings → Mode</a>).</span>
+            }
+        </div>
+    </section>
+}
+
+@foreach (var collector in gaps)
+{
+    <div class="alert alert-warning py-2">
+        Bundle(s) @string.Join(", ", collector.Missing) from <strong>@collector.Name</strong> haven't been imported yet; nothing is lost, they can be imported in any order.
+    </div>
+}
+
+<section class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5">Imports</h2>
+        @if (imports.Count == 0)
+        {
+            <p class="text-muted mb-0">Nothing imported yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>When</th><th>Bundle</th><th>Result</th><th>Items</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in imports)
+                        {
+                            <tr>
+                                <td class="text-nowrap" title="@Display.Local(b.ImportedAt)">@Display.Ago(b.ImportedAt)</td>
+                                <td class="text-break">@(b.Number is { } n ? $"#{n} from {b.CollectorName}" : "") <div class="small text-muted">@b.FileName</div></td>
+                                <td>
+                                    <span class="badge @(b.Status switch { ImportStatus.Imported => "text-bg-success", ImportStatus.Rejected => "text-bg-danger", _ => "text-bg-light border" })">@b.Status</span>
+                                    @if (b.Status != ImportStatus.Imported) { <div class="small text-muted">@b.Message</div> }
+                                </td>
+                                <td>@b.Items@(b.Skipped > 0 ? $" (+{b.Skipped} skipped)" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery] private string? Message { get; set; }
+
+    private InboxSettings? settings;
+    private List<ImportedBundle> imports = [];
+    private List<(string Name, List<int> Missing)> gaps = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await SettingsService.GetAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        imports = await db.ImportedBundles.AsNoTracking().OrderByDescending(b => b.Id).Take(200).ToListAsync();
+
+        // Bundle numbers count up per collector, so a hole means a bundle that hasn't arrived yet.
+        var imported = await db.ImportedBundles.AsNoTracking()
+            .Where(b => b.Status != ImportStatus.Rejected && b.CollectorId != null && b.Number != null)
+            .Select(b => new { b.CollectorId, b.CollectorName, b.Number }).ToListAsync();
+        foreach (var collector in imported.GroupBy(b => b.CollectorId))
+        {
+            var numbers = collector.Select(b => b.Number!.Value).ToHashSet();
+            var missing = Enumerable.Range(1, numbers.Max()).Where(n => !numbers.Contains(n)).Take(20).ToList();
+            if (missing.Count > 0) gaps.Add((collector.Last().CollectorName ?? "collector", missing));
+        }
+    }
+}
