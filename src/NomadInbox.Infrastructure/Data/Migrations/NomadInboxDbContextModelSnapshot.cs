@@ -654,6 +654,9 @@ namespace NomadInbox.Infrastructure.Data.Migrations
                     b.Property<int>("MaxAttachmentMegabytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("MaxBundleMegabytes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("MaxImagesPerPage")
                         .HasColumnType("INTEGER");
 

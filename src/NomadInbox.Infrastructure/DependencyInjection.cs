@@ -89,12 +89,14 @@ public static class DependencyInjection
         // Air-gapped operation: a collector exports bundles, the air-gapped NOMAD imports them.
         services.AddSingleton(sp => new BundleExporter(
             sp.GetRequiredService<IDbContextFactory<NomadInboxDbContext>>(), sp.GetRequiredService<SettingsService>(),
-            sp.GetRequiredService<AttachmentStore>(), exportDirectory ?? Path.Combine(dataDirectory, "export"),
+            sp.GetRequiredService<AttachmentStore>(), sp.GetRequiredService<PageStore>(), sp.GetRequiredService<VideoDownloader>(),
+            exportDirectory ?? Path.Combine(dataDirectory, "export"),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BundleExporter>>()));
         services.AddHostedService<BundleExportWorker>();
         services.AddSingleton(sp => new BundleImporter(
             sp.GetRequiredService<IDbContextFactory<NomadInboxDbContext>>(), sp.GetRequiredService<SettingsService>(),
-            sp.GetRequiredService<AttachmentStore>(), sp.GetRequiredService<KnowledgeTrigger>(), sp.GetRequiredService<LinkTrigger>(),
+            sp.GetRequiredService<AttachmentStore>(), sp.GetRequiredService<PageStore>(), sp.GetRequiredService<PageExporter>(),
+            sp.GetRequiredService<VideoDownloader>(), sp.GetRequiredService<KnowledgeTrigger>(), sp.GetRequiredService<LinkTrigger>(),
             sp.GetRequiredService<ImageTrigger>(), importDirectory ?? Path.Combine(dataDirectory, "import"),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BundleImporter>>()));
         services.AddSingleton<BundleImportWorker>();

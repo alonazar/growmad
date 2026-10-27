@@ -35,17 +35,19 @@ public static class PageEndpoints
             var page = await db.Pages.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id);
             if (page is null) return Results.NotFound();
             var token = antiforgery.GetAndStoreTokens(context).RequestToken!;
+            var settings = await settingsService.GetAsync();
 
             string html;
             if (page.Status != PageStatus.Done)
             {
-                html = StatusPage(page, token);
+                html = StatusPage(page, token, settings.UsesInternet);
             }
             else
             {
                 try
                 {
-                    html = await renderer.RenderAsync(id, PageView.App, await settingsService.GetAsync(), AppBar(page, token)) ?? StatusPage(page, token);
+                    html = await renderer.RenderAsync(id, PageView.App, settings, AppBar(page, token, settings.UsesInternet))
+                           ?? StatusPage(page, token, settings.UsesInternet);
                 }
                 catch (PageTemplateException ex)
                 {
@@ -75,7 +77,7 @@ public static class PageEndpoints
 
         // A link in a saved page whose target isn't saved (yet).
         pages.MapGet("/links/{linkId:int}", async (int linkId, HttpContext context, IAntiforgery antiforgery,
-            IDbContextFactory<NomadInboxDbContext> dbFactory) =>
+            IDbContextFactory<NomadInboxDbContext> dbFactory, SettingsService settingsService) =>
         {
             await using var db = await dbFactory.CreateDbContextAsync();
             var link = await db.PageLinks.AsNoTracking().SingleOrDefaultAsync(l => l.Id == linkId);
@@ -84,18 +86,23 @@ public static class PageEndpoints
             if (saved is { } savedId) return Results.Redirect($"/pages/{savedId}");
 
             var token = antiforgery.GetAndStoreTokens(context).RequestToken!;
+            var save = (await settingsService.GetAsync()).UsesInternet
+                ? $"""<form method="post" action="/pages/links/{linkId}/save">{Token(token)}<button class="nomad-button" type="submit">Save this page</button></form>"""
+                : "<p>This NOMAD is air-gapped: pages are saved on the collector and arrive in bundles.</p>";
             var body = $"""
                 <p>This page isn't saved yet.</p>
                 <p><strong>{Encode(link.Text ?? link.Url)}</strong><br><a href="{Encode(link.Url)}">{Encode(link.Url)}</a> (online)</p>
-                <form method="post" action="/pages/links/{linkId}/save">{Token(token)}<button class="nomad-button" type="submit">Save this page</button></form>
+                {save}
                 <p><a href="/pages/{link.ArchivedPageId}">← Back to the page that links here</a></p>
                 """;
             return PageResult(context, Simple("Not saved yet", body, null));
         });
 
-        pages.MapPost("/links/{linkId:int}/save", async (int linkId, HttpContext context, IAntiforgery antiforgery, PageService service) =>
+        pages.MapPost("/links/{linkId:int}/save", async (int linkId, HttpContext context, IAntiforgery antiforgery, PageService service,
+            SettingsService settingsService) =>
         {
             await antiforgery.ValidateRequestAsync(context);
+            if (!(await settingsService.GetAsync()).UsesInternet) return Results.Redirect($"/pages/links/{linkId}");
             var result = await service.SaveLinkAsync(linkId, context.RequestAborted);
             return result switch
             {
@@ -106,9 +113,11 @@ public static class PageEndpoints
         }).DisableAntiforgery(); // validated explicitly above
 
         pages.MapPost("/{id:int}/{action:regex(^(refresh|delete|save-links)$)}", async (int id, string action,
-            HttpContext context, IAntiforgery antiforgery, PageService service) =>
+            HttpContext context, IAntiforgery antiforgery, PageService service, SettingsService settingsService) =>
         {
             await antiforgery.ValidateRequestAsync(context);
+            // The air-gapped NOMAD can't fetch pages; it gets them from the collector.
+            if (action != "delete" && !(await settingsService.GetAsync()).UsesInternet) return Results.Redirect($"/pages/{id}");
             switch (action)
             {
                 case "refresh":
@@ -144,25 +153,31 @@ public static class PageEndpoints
         return Results.Content(html, "text/html; charset=utf-8");
     }
 
-    private static string AppBar(ArchivedPage page, string token) => $"""
+    /// <param name="online">False on the air-gapped NOMAD: nothing can be fetched there.</param>
+    private static string AppBar(ArchivedPage page, string token, bool online) => $"""
         <nav class="nomad-appbar">
           <a href="/library">← Library</a>
           {(page.InboxEmailId is { } emailId ? $"<a href=\"/emails/{emailId}\">Email</a>" : "")}
           <a href="{Encode(page.FinalUrl ?? page.Url)}">Original</a>
           <span class="spacer"></span>
+          {(online ? $"""
           <form method="post" action="/pages/{page.Id}/save-links">{Token(token)}<button type="submit" title="Save the pages this one links to (same site)">Save linked pages</button></form>
           <form method="post" action="/pages/{page.Id}/refresh">{Token(token)}<button type="submit">Refresh</button></form>
+          """ : "")}
           <form method="post" action="/pages/{page.Id}/delete">{Token(token)}<button type="submit">Delete</button></form>
         </nav>
         """;
 
-    private static string StatusPage(ArchivedPage page, string token)
+    private static string StatusPage(ArchivedPage page, string token, bool online)
     {
         var (title, body, refresh) = page.Status switch
         {
             PageStatus.Failed => ("Couldn't save this page",
-                $"<p>{Encode(page.Error ?? "Unknown error.")}</p><form method=\"post\" action=\"/pages/{page.Id}/refresh\">{Token(token)}<button class=\"nomad-button\" type=\"submit\">Try again</button></form>",
+                $"<p>{Encode(page.Error ?? "Unknown error.")}</p>" + (online
+                    ? $"<form method=\"post\" action=\"/pages/{page.Id}/refresh\">{Token(token)}<button class=\"nomad-button\" type=\"submit\">Try again</button></form>"
+                    : ""),
                 false),
+            _ when !online => ("Not saved yet", "<p>This NOMAD is air-gapped: the page arrives once the collector has saved it.</p>", false),
             _ => ("Saving this page…", "<p>This page refreshes by itself until it's done.</p>", true),
         };
         return Simple(title, body + $"<p><a href=\"{Encode(page.Url)}\">{Encode(page.Url)}</a> · <a href=\"/library\">Library</a></p>", null, refresh);

@@ -52,7 +52,7 @@
                                 With an AI set up below, links are summarized and images described here; otherwise the air-gapped NOMAD does it.
                             </div>
                             <div class="row g-3">
-                                <div class="col-md-5">
+                                <div class="col-md-3">
                                     <label class="form-label" for="collectorName">Collector name</label>
                                     <InputText id="collectorName" class="form-control" @bind-Value="form.CollectorName" />
                                     <ValidationMessage For="() => form.CollectorName" />
@@ -62,13 +62,22 @@
                                     <InputNumber id="autoExport" class="form-control" @bind-Value="form.AutoExportHours" />
                                     <ValidationMessage For="() => form.AutoExportHours" />
                                 </div>
-                                <div class="col-md-4">
-                                    <label class="form-label" for="aiWait">Wait for the AI (hours)</label>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="aiWait">AI wait (hours)</label>
                                     <InputNumber id="aiWait" class="form-control" @bind-Value="form.ExportAiWaitHours" />
                                     <ValidationMessage For="() => form.ExportAiWaitHours" />
                                 </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="bundleSize">Largest bundle (MB)</label>
+                                    <InputNumber id="bundleSize" class="form-control" @bind-Value="form.MaxBundleMegabytes" />
+                                    <ValidationMessage For="() => form.MaxBundleMegabytes" />
+                                </div>
                             </div>
-                            <div class="form-text">0 hours = bundles only with <strong>Create bundle now</strong>. An item goes into a bundle once its links are fetched, and, with an AI here, summarized, or after the wait.</div>
+                            <div class="form-text">
+                                0 hours = bundles only with <strong>Create bundle now</strong>. An item goes into a bundle once its links, pages and videos
+                                are fetched, and, with an AI here, summarized, or after the wait. A bigger export is split into several bundles:
+                                up to 4000 MB fits a FAT32 USB drive.
+                            </div>
                             break;
                         case AppMode.AirGapped:
                             <div class="form-text mb-2">
@@ -796,6 +805,7 @@
         [Required, Display(Name = "Collector name")] public string CollectorName { get; set; } = "";
         [Range(0, 720, ErrorMessage = "Choose between 0 and 720 hours.")] public int AutoExportHours { get; set; }
         [Range(0, 168, ErrorMessage = "Choose between 0 and 168 hours.")] public int ExportAiWaitHours { get; set; }
+        [Range(100, 4000, ErrorMessage = "Choose between 100 and 4000 MB.")] public int MaxBundleMegabytes { get; set; }
         public bool WatchImportFolder { get; set; }
 
         public static SettingsForm From(InboxSettings s) => new()
@@ -813,7 +823,7 @@
             DescribeImages = s.DescribeImages, VisionModel = s.VisionModel, MaxImagesPerPage = s.MaxImagesPerPage,
             PublicBaseUrl = s.PublicBaseUrl,
             Mode = s.Mode, CollectorName = s.CollectorName, AutoExportHours = s.AutoExportHours, ExportAiWaitHours = s.ExportAiWaitHours,
-            WatchImportFolder = s.WatchImportFolder,
+            MaxBundleMegabytes = s.MaxBundleMegabytes, WatchImportFolder = s.WatchImportFolder,
             ImapHost = s.ImapHost, ImapPort = s.ImapPort, Username = s.Username, Folder = s.Folder,
             SubjectPrefix = s.SubjectPrefix, AllowedSenders = s.AllowedSenders,
             ImportSince = s.ImportSince?.LocalDateTime.Date,
@@ -874,6 +884,7 @@
             s.CollectorName = CollectorName.Trim();
             s.AutoExportHours = AutoExportHours;
             s.ExportAiWaitHours = ExportAiWaitHours;
+            s.MaxBundleMegabytes = MaxBundleMegabytes;
             s.WatchImportFolder = WatchImportFolder;
             return s;
         }
