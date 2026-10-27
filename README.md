@@ -150,10 +150,10 @@ If Ollama isn't running, images wait and are described once it's back. A descrip
 
 For a NOMAD without internet, **Settings → Mode** splits the work over two machines (set-up: [Air-gapped NOMAD](README-SETUP.md#air-gapped-nomad-a-collector-and-bundles)):
 
-- **Collector** (a wired machine): checks mail and fetches everything as above, but instead of sending to NOMAD it writes **bundles**: ZIP files with each new or changed item (its links with text, transcripts and any summaries, its attachments and image descriptions) and a manifest with a checksum for every file. Bundles are written on a schedule or with **Create bundle now**, and listed on the **Export** page. With an AI set up, an item waits for its summaries (up to a few hours) before it goes into a bundle.
-- **Air-gapped** (the NOMAD): doesn't check mail or fetch anything. Bundles are imported on the **Import** page (or from a watched folder) after checking every file against the manifest; then this side's AI summarizes and describes whatever the collector didn't, and the items go to NOMAD's knowledge base like any others. Imports are idempotent and order-independent, and items deleted on this side stay deleted.
+- **Collector** (a wired machine): checks mail and fetches everything as above, but instead of sending to NOMAD it writes **bundles**: ZIP files with each new or changed item (its links with text, transcripts and any summaries, its attachments and image descriptions, its saved pages with their images and videos, and its downloaded YouTube videos) and a manifest with a checksum for every file. Bundles are written on a schedule or with **Create bundle now**, and listed on the **Export** page. An item waits until its pages and videos are saved and, with an AI set up, its summaries are written (up to a few hours) before it goes into a bundle. A big export is split into several bundles, each under a size limit (3500 MB by default, so they fit a FAT32 USB drive) and each complete on its own.
+- **Air-gapped** (the NOMAD): doesn't check mail or fetch anything. Bundles are imported on the **Import** page (or from a watched folder) after checking every file against the manifest; then this side's AI summarizes and describes whatever the collector didn't, and the items go to NOMAD's knowledge base like any others. Saved pages appear in the **Library** and NOMAD's File Browser, videos in the videos folder (Jellyfin). Imports are idempotent and order-independent, and items deleted on this side stay deleted.
 
-Not in bundles yet: saved pages and downloaded videos. Bundles aren't signed yet.
+Bundles aren't signed yet.
 
 ## Updating
 

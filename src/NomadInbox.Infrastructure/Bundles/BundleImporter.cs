@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -10,7 +11,9 @@ using NomadInbox.Infrastructure.Files;
 using NomadInbox.Infrastructure.Images;
 using NomadInbox.Infrastructure.Ingest;
 using NomadInbox.Infrastructure.Knowledge;
+using NomadInbox.Infrastructure.Pages;
 using NomadInbox.Infrastructure.Settings;
+using NomadInbox.Infrastructure.YouTube;
 
 namespace NomadInbox.Infrastructure.Bundles;
 
@@ -30,6 +33,9 @@ public sealed class BundleImporter(
     IDbContextFactory<NomadInboxDbContext> dbFactory,
     SettingsService settingsService,
     AttachmentStore store,
+    PageStore pageStore,
+    PageExporter pageExporter,
+    VideoDownloader videos,
     KnowledgeTrigger knowledgeTrigger,
     LinkTrigger linkTrigger,
     ImageTrigger imageTrigger,
@@ -113,7 +119,8 @@ public sealed class BundleImporter(
             if (!BundleFormat.EntryName().IsMatch(entry.FullName) || !listed.Remove(entry.FullName))
                 throw new BundleException($"The bundle contains an unexpected file: {entry.FullName}");
             if (entry.Length > MaxEntryBytes) throw new BundleException($"{entry.FullName} is too large.");
-            if (await HashAsync(entry, ct) != manifest.Files[entry.FullName])
+            var hash = await HashAsync(entry, ct);
+            if (hash != manifest.Files[entry.FullName] || !BundleFormat.NameMatchesContent(entry.FullName, hash))
                 throw new BundleException($"{entry.FullName} doesn't match its checksum; the bundle is damaged or was changed.");
         }
         if (listed.Count > 0) throw new BundleException($"The bundle is missing {listed.Count} file(s), e.g. {listed.First()}.");
@@ -126,6 +133,7 @@ public sealed class BundleImporter(
         var deleted = (await db.DeletedMessages.Select(d => d.MessageId).ToListAsync(ct)).ToHashSet();
         int items = 0, skipped = 0;
         var now = DateTimeOffset.UtcNow;
+        var pages = new Dictionary<int, string>(); // id → URL of the pages to refresh in the File Browser copy
 
         foreach (var entry in zip.Entries.Where(e => e.FullName.StartsWith("items/", StringComparison.Ordinal)).OrderBy(e => e.FullName))
         {
@@ -144,7 +152,7 @@ public sealed class BundleImporter(
                 continue;
             }
 
-            await ApplyAsync(db, zip, item, now, ct);
+            foreach (var (id, url) in await ApplyAsync(db, zip, item, now, ct)) pages[id] = url;
             if (previous is null)
                 db.ImportedItems.Add(new ImportedItem { MessageId = item.MessageId, CollectorId = manifest.CollectorId, BundleNumber = manifest.Number, ContentHash = hash, ImportedAt = now });
             else
@@ -157,14 +165,19 @@ public sealed class BundleImporter(
             await db.SaveChangesAsync(ct);
             items++;
         }
+        foreach (var (id, url) in pages) await pageExporter.PageChangedAsync(id, url, ct);
         return (items, skipped);
     }
 
-    /// <summary>Adds the item, or replaces an earlier copy's links and attachments.</summary>
-    private async Task ApplyAsync(NomadInboxDbContext db, ZipArchive zip, BundleItem item, DateTimeOffset now, CancellationToken ct)
+    /// <summary>
+    /// Adds the item, or replaces an earlier copy's links and attachments; then its saved pages. Returns the pages
+    /// (id → URL) whose File Browser copy needs refreshing.
+    /// </summary>
+    private async Task<Dictionary<int, string>> ApplyAsync(NomadInboxDbContext db, ZipArchive zip, BundleItem item, DateTimeOffset now, CancellationToken ct)
     {
         var email = await db.Emails.Include(e => e.Links).Include(e => e.Attachments).AsSplitQuery()
             .SingleOrDefaultAsync(e => e.MessageId == item.MessageId, ct);
+        var oldLinks = new Dictionary<int, int>(); // replaced link id → position, for pages that pointed at them
         if (email is null)
         {
             email = new InboxEmail { MessageId = item.MessageId, Folder = item.Folder, FromAddress = item.FromAddress, Subject = item.Subject, CreatedAt = now };
@@ -172,6 +185,7 @@ public sealed class BundleImporter(
         }
         else
         {
+            foreach (var l in email.Links) oldLinks[l.Id] = l.Position;
             db.Links.RemoveRange(email.Links);
             db.Attachments.RemoveRange(email.Attachments);
             email.Links.Clear();
@@ -197,14 +211,17 @@ public sealed class BundleImporter(
 
         foreach (var l in item.Links ?? [])
         {
-            email.Links.Add(new EmailLink
+            var link = new EmailLink
             {
                 Url = l.Url, Kind = l.Kind, Position = l.Position, Status = l.Status, Error = l.Error, FinalUrl = l.FinalUrl,
                 ContentType = l.ContentType, Title = l.Title, SiteName = l.SiteName, ContentText = l.ContentText, FetchedAt = l.FetchedAt,
                 ExternalId = l.ExternalId, Author = l.Author, AuthorId = l.AuthorId, AuthorUrl = l.AuthorUrl, PublishedAt = l.PublishedAt,
                 DurationSeconds = l.DurationSeconds, Description = l.Description, ContentSource = l.ContentSource, Chapters = l.Chapters,
                 Summary = l.Summary, SummaryModel = l.SummaryModel, SummarizedAt = l.SummarizedAt,
-            });
+                VideoStatus = l.VideoStatus, VideoError = l.VideoError,
+            };
+            email.Links.Add(link);
+            await ApplyVideoAsync(zip, l, link, email, ct);
         }
 
         foreach (var a in item.Attachments ?? [])
@@ -224,19 +241,155 @@ public sealed class BundleImporter(
             email.Attachments.Add(attachment);
 
             if (a.Image is { } image && a.Sha256 is not null && attachment.StoredPath is not null)
-                await UpsertImageAsync(db, ImageDescription.KeyFor(a.Sha256), attachment.StoredPath, image, now, ct);
+                await UpsertImageAsync(db, ImageDescription.KeyFor(a.Sha256), ImageSource.Attachment, attachment.StoredPath, image, now, ct);
         }
         email.LinkCount = email.Links.Count;
         email.AttachmentCount = email.Attachments.Count;
+        await db.SaveChangesAsync(ct);
+
+        return await ApplyPagesAsync(db, zip, email, item.Pages ?? [], oldLinks, now, ct);
+    }
+
+    /// <summary>
+    /// A downloaded video goes into the videos folder (Jellyfin's) under the collector's path, with its thumbnail and a
+    /// fresh metadata file. One that wasn't downloaded yet can't be downloaded here.
+    /// </summary>
+    private async Task ApplyVideoAsync(ZipArchive zip, BundleLink from, EmailLink link, InboxEmail email, CancellationToken ct)
+    {
+        if (from.VideoStatus == VideoStatus.Queued)
+        {
+            link.VideoStatus = VideoStatus.Failed;
+            link.VideoError = "Wasn't downloaded before the bundle was made.";
+            return;
+        }
+        if (from.VideoStatus != VideoStatus.Downloaded) return;
+
+        if (from.Video is null || from.VideoPath is null || SafeVideoPath(from.VideoPath) is not { } relative ||
+            videos.ResolveFullPath(relative) is not { } target)
+        {
+            link.VideoStatus = VideoStatus.Failed;
+            link.VideoError = "The video file wasn't in the bundle.";
+            return;
+        }
+        await ExtractAsync(zip, from.Video, target, ct);
+        if (from.VideoThumbnail is not null)
+            await ExtractAsync(zip, from.VideoThumbnail, Path.Combine(Path.GetDirectoryName(target)!, Path.GetFileNameWithoutExtension(target) + "-thumb.jpg"), ct);
+        link.VideoPath = relative;
+        link.VideoBytes = new FileInfo(target).Length;
+        await videos.WriteNfoAsync(link, email, ct);
+    }
+
+    /// <summary>The collector's relative video path, each part made a plain file name ("Channel/2026-10-21 Title [id].mp4").</summary>
+    public static string? SafeVideoPath(string path)
+    {
+        var parts = path.Replace('\\', '/').Split('/');
+        if (parts.Length is < 1 or > 3) return null;
+        var clean = parts.Select(AttachmentStore.SanitizeFileName).ToArray();
+        return string.Join('/', clean);
+    }
+
+    /// <summary>Adds or replaces the item's saved pages (by URL), their media files, links and image descriptions.</summary>
+    private async Task<Dictionary<int, string>> ApplyPagesAsync(NomadInboxDbContext db, ZipArchive zip, InboxEmail email, IReadOnlyList<BundlePage> pages,
+        Dictionary<int, int> oldLinks, DateTimeOffset now, CancellationToken ct)
+    {
+        var changed = new Dictionary<int, string>();
+        var savedFrom = new List<(ArchivedPage Page, string? From)>();
+        foreach (var p in pages)
+        {
+            if (string.IsNullOrWhiteSpace(p.Url) || p.Url.Length > 4000) throw new BundleException("A saved page in the bundle has no valid address.");
+            var page = await db.Pages.Include(x => x.Assets).Include(x => x.Links).AsSplitQuery().SingleOrDefaultAsync(x => x.Url == p.Url, ct);
+            if (page is null)
+            {
+                page = new ArchivedPage { Url = p.Url };
+                db.Pages.Add(page);
+            }
+            else
+            {
+                db.PageAssets.RemoveRange(page.Assets);
+                db.PageLinks.RemoveRange(page.Links);
+                page.Assets.Clear();
+                page.Links.Clear();
+            }
+
+            page.FinalUrl = p.FinalUrl;
+            page.Status = PageStatus.Done;
+            page.Error = null;
+            page.Title = p.Title;
+            page.SiteName = p.SiteName;
+            page.Byline = p.Byline;
+            page.Excerpt = p.Excerpt;
+            page.TextContent = p.TextContent;
+            page.InboxEmailId = email.Id;
+            page.SourceLinkId = p.SourceLinkPosition is { } position ? email.Links.FirstOrDefault(l => l.Position == position)?.Id : null;
+            page.RequestedAt = p.RequestedAt;
+            page.ArchivedAt = p.ArchivedAt ?? now;
+            page.Bytes = p.Bytes;
+
+            foreach (var a in p.Assets ?? [])
+            {
+                var fileName = a.FileName is not null && BundleFormat.AssetName().IsMatch(a.FileName) ? a.FileName : null;
+                if (a.File is not null)
+                {
+                    if (fileName is null || a.File != $"assets/{fileName}") throw new BundleException($"{a.File} doesn't match its page's asset.");
+                    await ExtractAsync(zip, a.File, Path.Combine(pageStore.AssetRoot, fileName), ct);
+                }
+                page.Assets.Add(new PageAsset
+                {
+                    OriginalUrl = a.OriginalUrl, Kind = a.Kind, FileName = fileName, ContentType = a.ContentType, Bytes = a.Bytes, Error = a.Error,
+                });
+                if (a.Image is { } image && a.File is not null)
+                    await UpsertImageAsync(db, Path.GetFileNameWithoutExtension(fileName!), ImageSource.PageAsset, fileName!, image, now, ct);
+            }
+            foreach (var l in p.Links ?? [])
+                page.Links.Add(new PageLink { Url = l.Url, Text = l.Text, Position = l.Position });
+            await db.SaveChangesAsync(ct); // gives a new page its id
+
+            if (p.Content is not null)
+            {
+                var entry = zip.GetEntry(p.Content) ?? throw new BundleException($"{p.Content} is listed but missing.");
+                await pageStore.WriteContentAsync(page.Id, Encoding.UTF8.GetString(await ReadAsync(entry, ct)), ct);
+                page.ContentPath = Path.GetRelativePath(Path.GetDirectoryName(pageStore.ContentRoot)!, pageStore.ContentPathFor(page.Id)).Replace('\\', '/');
+            }
+            savedFrom.Add((page, p.SavedFromUrl));
+            changed[page.Id] = page.Url;
+        }
+
+        foreach (var (page, from) in savedFrom)
+            page.SavedFromPageId = from is null ? null : await db.Pages.Where(x => x.Url == from).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct);
+
+        // The item's other pages (saved here before) pointed at links that were just replaced.
+        if (oldLinks.Count > 0)
+        {
+            var oldIds = oldLinks.Keys.ToList();
+            foreach (var page in await db.Pages.Where(x => x.SourceLinkId != null && oldIds.Contains(x.SourceLinkId.Value)).ToListAsync(ct))
+                page.SourceLinkId = email.Links.FirstOrDefault(l => l.Position == oldLinks[page.SourceLinkId!.Value])?.Id;
+        }
+        await db.SaveChangesAsync(ct);
+        return changed;
+    }
+
+    /// <summary>Writes an entry to a file, unless the same file (by size) is there already.</summary>
+    private static async Task ExtractAsync(ZipArchive zip, string name, string target, CancellationToken ct)
+    {
+        var entry = zip.GetEntry(name) ?? throw new BundleException($"{name} is listed but missing.");
+        if (File.Exists(target) && new FileInfo(target).Length == entry.Length) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var temp = target + ".partial";
+        await using (var source = entry.Open())
+        await using (var file = File.Create(temp))
+            await source.CopyToAsync(file, ct);
+        File.Move(temp, target, overwrite: true);
     }
 
     /// <summary>The collector's description of an image (it had an AI), so this side doesn't describe it again.</summary>
-    private static async Task UpsertImageAsync(NomadInboxDbContext db, string key, string storedPath, BundleImage image, DateTimeOffset now, CancellationToken ct)
+    private static async Task UpsertImageAsync(NomadInboxDbContext db, string key, ImageSource source, string sourcePath, BundleImage image,
+        DateTimeOffset now, CancellationToken ct)
     {
         var row = await db.ImageDescriptions.SingleOrDefaultAsync(d => d.ImageKey == key, ct)
-                  ?? db.ImageDescriptions.Add(new ImageDescription { ImageKey = key, SourcePath = storedPath }).Entity;
-        row.Source = ImageSource.Attachment;
-        row.SourcePath = storedPath;
+                  ?? db.ImageDescriptions.Local.SingleOrDefault(d => d.ImageKey == key)
+                  ?? db.ImageDescriptions.Add(new ImageDescription { ImageKey = key, SourcePath = sourcePath }).Entity;
+        row.Source = source;
+        row.SourcePath = sourcePath;
         row.Status = ImageDescriptionStatus.Done;
         row.Caption = image.Caption;
         row.ImageType = image.ImageType;

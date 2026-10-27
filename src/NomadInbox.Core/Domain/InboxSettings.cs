@@ -138,6 +138,8 @@ public class InboxSettings
     public int AutoExportHours { get; set; } = 24;
     /// <summary>Collector with an AI: an item waits at most this long for its summaries before it's exported without them.</summary>
     public int ExportAiWaitHours { get; set; } = 6;
+    /// <summary>Collector: a bigger export is split into several bundles. FAT32 USB drives take files up to 4 GB.</summary>
+    public int MaxBundleMegabytes { get; set; } = 3500;
     /// <summary>Air-gapped: import bundles placed in the import folder, not only ones uploaded on the Import page.</summary>
     public bool WatchImportFolder { get; set; }
 

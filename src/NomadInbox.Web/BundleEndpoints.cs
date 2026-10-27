@@ -11,7 +11,7 @@ namespace NomadInbox.Web;
 /// </summary>
 public static class BundleEndpoints
 {
-    /// <summary>Uploads can be large (bundles carry attachments, later videos).</summary>
+    /// <summary>Uploads can be large (bundles carry attachments, pages and videos).</summary>
     private const long MaxUploadBytes = 8L * 1024 * 1024 * 1024;
 
     public static void MapBundleEndpoints(this WebApplication app)
@@ -22,10 +22,14 @@ public static class BundleEndpoints
             string message;
             try
             {
-                var result = await exporter.ExportAsync(context.RequestAborted);
-                message = result is null
-                    ? "Nothing new to export yet."
-                    : $"Bundle {result.Number} is ready: {result.FileName} ({result.Items} item(s)).";
+                var results = await exporter.ExportAsync(context.RequestAborted);
+                message = results.Count switch
+                {
+                    0 => "Nothing new to export yet.",
+                    1 => $"Bundle {results[0].Number} is ready: {results[0].FileName} ({results[0].Items} item(s)).",
+                    _ => $"Bundles {results[0].Number}–{results[^1].Number} are ready ({results.Sum(r => r.Items)} item(s), split to stay " +
+                         "under the size limit). Copy all of them.",
+                };
             }
             catch (InvalidOperationException ex)
             {

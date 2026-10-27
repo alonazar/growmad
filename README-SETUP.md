@@ -184,7 +184,7 @@ cd ~/nomad-inbox && git pull && docker compose up -d --build
 
 For a NOMAD without internet. NOMAD Inbox then runs twice:
 
-- a **collector** on any wired machine (no NOMAD needed): it checks Gmail, fetches pages and transcripts, and writes **bundles** (ZIP files);
+- a **collector** on any wired machine (no NOMAD needed): it checks Gmail, fetches pages, transcripts and videos, and writes **bundles** (ZIP files);
 - NOMAD Inbox on the **air-gapped NOMAD**: it imports the bundles you carry over on a USB drive, then summarizes what the collector didn't and fills NOMAD's knowledge base as usual.
 
 Where the AI runs: if the collector has an AI set up (**Settings → AI summaries**, e.g. NOMAD's AI Assistant next to it), links are summarized and images described there, and bundles carry the results. Otherwise the air-gapped NOMAD's AI does it after the import.
@@ -192,8 +192,9 @@ Where the AI runs: if the collector has an AI set up (**Settings → AI summarie
 ### The collector
 
 1. Install with [install.sh](#run-with-installsh-instead-ubuntu--wsl2) on the wired machine and do the [Gmail setup](#gmail-setup).
-2. **Settings → Mode → Collector**. Give it a name (shown on the air-gapped side), how often to write a bundle (every 24 hours by default; 0 = only by hand), and how long an item waits for the collector's AI.
-3. Bundles appear on the **Export** page (download them there) and in `~/nomad-inbox/export`. **Create bundle now** writes one straight away. Each bundle holds only items that are new or changed since the last one.
+2. **Settings → Mode → Collector**. Give it a name (shown on the air-gapped side), how often to write a bundle (every 24 hours by default; 0 = only by hand), how long an item waits for the collector's AI, and the largest bundle.
+3. Bundles appear on the **Export** page (download them there) and in `~/nomad-inbox/export`. **Create bundle now** writes one straight away. Each bundle holds only items that are new or changed since the last one, with their attachments, saved pages and downloaded videos.
+4. **USB drives:** a FAT32 drive (most USB sticks) takes files up to 4 GB, so a bigger export is split into several bundles of at most **Largest bundle** (3500 MB by default). Copy all of them; they can be imported in any order. An item is never split, so one with a video bigger than the limit gets a bundle of its own: keep **Settings → YouTube → Max size per video** under 4000 MB (it's 2048 by default), or use an exFAT drive.
 
 ### The air-gapped NOMAD
 
@@ -209,8 +210,9 @@ Where the AI runs: if the collector has an AI set up (**Settings → AI summarie
    - Importing the same bundle twice, or bundles out of order, is fine; a newer copy of an item is never replaced by an older one.
    - Items you delete here stay deleted, even when a later bundle carries them again.
    - A bundle that isn't complete or was changed is rejected, with the reason on the Import page.
+   - Saved pages go to the **Library** and NOMAD's File Browser (`nomad-inbox-pages`), videos to NOMAD's media folder for Jellyfin, as on a connected NOMAD. Here, pages can't be refreshed or saved from their links: that happens on the collector.
 5. **Optional, a watched folder:** in **Manage › Edit**, add the volume `/opt/project-nomad/storage/filebrowser/files/nomad-inbox-import` → `/import` and the environment variable `NomadInbox__ImportDirectory=/import`, then turn on **Settings → Mode → Also import bundles placed in the import folder**. Bundles copied into `nomad-inbox-import` in NOMAD's File Browser are imported within a minute and moved to `imported` (or `rejected`).
 
 **Updating** the air-gapped NOMAD Inbox works the same way: `docker load` the new version, then change the image tag in **Manage › Edit**. (**Update (pull latest)** needs the internet.)
 
-Bundles aren't signed yet; signing, saved pages and videos in bundles come next.
+Bundles aren't signed yet; signing comes next.
