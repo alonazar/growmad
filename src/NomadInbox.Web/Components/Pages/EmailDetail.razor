@@ -18,12 +18,16 @@
     {
         <span class="badge text-bg-danger">New video from a followed channel</span>
     }
+    else if (email.Source == ItemSource.InternetArchive)
+    {
+        <span class="badge text-bg-secondary">From the Internet Archive</span>
+    }
     <div class="ms-auto d-flex align-items-start gap-2">
         @if (email.Source == ItemSource.FollowedChannel)
         {
             <a class="btn btn-link btn-sm" href="channels">Followed channels</a>
         }
-        else if (email.Status is EmailStatus.Done or EmailStatus.Failed or EmailStatus.Ignored)
+        else if (email.Source == ItemSource.Email && email.Status is EmailStatus.Done or EmailStatus.Failed or EmailStatus.Ignored)
         {
             <form method="post" action="emails/@email.Id/reprocess">
                 <AntiforgeryToken />
@@ -38,7 +42,7 @@
             <form method="post" action="emails/@email.Id/delete" class="delete-panel card card-body shadow-sm">
                 <AntiforgeryToken />
                 <p class="small mb-2">
-                    Deletes this @(email.Source == ItemSource.FollowedChannel ? "item" : "email") with its links and attachments,
+                    Deletes this @(email.Source == ItemSource.Email ? "email" : "item") with its links and attachments,
                     and removes its documents from NOMAD's knowledge base. It won't be imported again.
                 </p>
                 <label class="form-check small mb-2">

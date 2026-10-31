@@ -213,6 +213,6 @@ Where the AI runs: if the collector has an AI set up (**Settings → AI summarie
    - Saved pages go to the **Library** and NOMAD's File Browser (`nomad-inbox-pages`), videos to NOMAD's media folder for Jellyfin, as on a connected NOMAD. Here, pages can't be refreshed or saved from their links: that happens on the collector.
 5. **Optional, a watched folder:** in **Manage › Edit**, add the volume `/opt/project-nomad/storage/filebrowser/files/nomad-inbox-import` → `/import` and the environment variable `NomadInbox__ImportDirectory=/import`, then turn on **Settings → Mode → Also import bundles placed in the import folder**. Bundles copied into `nomad-inbox-import` in NOMAD's File Browser are imported within a minute and moved to `imported` (or `rejected`).
 
-**Updating** the air-gapped NOMAD Inbox works the same way: `docker load` the new version, then change the image tag in **Manage › Edit**. (**Update (pull latest)** needs the internet.)
+**Updating** the air-gapped NOMAD Inbox works the same way: `docker load` the new version, then change the image tag in **Manage › Edit**. (**Update (pull latest)** needs the internet.) Update it before or together with the collector: a bundle from a newer collector can need a newer NOMAD Inbox, and the Import page says so if it does.
 
 Bundles aren't signed yet; signing comes next.

@@ -52,6 +52,8 @@ public enum ItemSource
 {
     Email,
     FollowedChannel,
+    /// <summary>A PDF imported from an Internet Archive collection.</summary>
+    InternetArchive,
 }
 
 public enum EmailStatus

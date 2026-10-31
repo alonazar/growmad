@@ -22,6 +22,7 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
     public DbSet<ArchivedPage> Pages => Set<ArchivedPage>();
     public DbSet<PageAsset> PageAssets => Set<PageAsset>();
     public DbSet<PageLink> PageLinks => Set<PageLink>();
+    public DbSet<ArchiveFile> ArchiveFiles => Set<ArchiveFile>();
     public DbSet<InboxSettings> Settings => Set<InboxSettings>();
     public DbSet<MailboxCursor> Cursors => Set<MailboxCursor>();
 
@@ -111,6 +112,13 @@ public class NomadInboxDbContext(DbContextOptions<NomadInboxDbContext> options) 
             e.HasIndex(x => x.FileName);
         });
         model.Entity<PageLink>(e => e.HasIndex(x => x.Url));
+
+        model.Entity<ArchiveFile>(e =>
+        {
+            e.HasIndex(x => new { x.Identifier, x.FileName }).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        });
 
         model.Entity<InboxSettings>(e =>
         {

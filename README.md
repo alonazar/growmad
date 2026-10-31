@@ -155,6 +155,14 @@ For a NOMAD without internet, **Settings → Mode** splits the work over two mac
 
 Bundles aren't signed yet.
 
+### 9. Internet Archive
+
+The **Internet Archive** page imports the PDFs of a collection on [archive.org](https://archive.org). Paste a link to the collection or to one file in it, tick the PDFs you want (a link to one file ticks only that one; **Select all** takes them all), choose a category, and click **Import**.
+
+- The PDFs download one at a time in the background, each checked against the archive's checksum and retried if it fails. Each becomes an item with the PDF attached, so the whole PDF goes to NOMAD's knowledge base, or into the next bundle on a collector.
+- Only the original PDFs are taken, not the formats the archive generates from them. A scan comes as the searchable-text PDF the archive made of it, under the original's name.
+- The usual limits apply (**Settings → Attachments**: maximum size and allowed kinds). Importing a collection again brings only what's new, and items you deleted stay deleted.
+
 ## Updating
 
 Installed from NOMAD's Supply Depot, use **Manage › Update (pull latest)** on the app's card. NOMAD downloads the image's tag again and restarts the app with your data; if the new version doesn't start, it goes back to the one that was running. Database migrations run on start.

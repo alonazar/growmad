@@ -25,8 +25,8 @@ namespace NomadInbox.Infrastructure.Bundles;
 public static partial class BundleFormat
 {
     public const string Format = "nomad-inbox-bundle";
-    /// <summary>1: items and attachments. 2: also saved pages and videos.</summary>
-    public const int Version = 2;
+    /// <summary>1: items and attachments. 2: also saved pages and videos. 3: also items from the Internet Archive.</summary>
+    public const int Version = 3;
     public const string ManifestName = "manifest.json";
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
