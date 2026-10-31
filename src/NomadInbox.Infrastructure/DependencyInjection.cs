@@ -102,6 +102,11 @@ public static class DependencyInjection
         services.AddSingleton<BundleImportWorker>();
         services.AddHostedService(sp => sp.GetRequiredService<BundleImportWorker>());
 
+        // PDFs from Internet Archive collections.
+        services.AddSingleton<Archive.ArchiveTrigger>();
+        services.AddSingleton<Archive.InternetArchiveImporter>();
+        services.AddHostedService<Archive.InternetArchiveWorker>();
+
         // Image descriptions for the knowledge base (NOMAD's Ollama, with a model that can read images).
         services.AddSingleton<ImageDescriber>();
         services.AddSingleton<ImageTrigger>();

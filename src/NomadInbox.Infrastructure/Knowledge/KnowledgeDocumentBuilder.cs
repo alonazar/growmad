@@ -237,7 +237,7 @@ public static partial class KnowledgeDocumentBuilder
         var filed = string.Join(" ", new[] { email.Category }.Concat(email.Tags.Select(t => "#" + t)).Where(s => !string.IsNullOrWhiteSpace(s)));
         var lines = new List<string>();
         if (filed.Length > 0) lines.Add($"- Filed under: {filed}");
-        lines.Add($"- Received: {email.ReceivedAt:yyyy-MM-dd} ({(email.Source == ItemSource.FollowedChannel ? "followed channel" : "NOMAD Inbox email")})");
+        lines.Add($"- Received: {email.ReceivedAt:yyyy-MM-dd} ({(email.Source switch { ItemSource.FollowedChannel => "followed channel", ItemSource.InternetArchive => "Internet Archive", _ => "NOMAD Inbox email" })})");
         return string.Join('\n', lines);
     }
 

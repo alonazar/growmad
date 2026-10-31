@@ -88,7 +88,7 @@ public sealed class EmailProcessor(
 
             email.Attachments.Clear();
             foreach (var attachment in message.Attachments)
-                email.Attachments.Add(await FileAttachmentAsync(db, email, attachment, settings, ct));
+                email.Attachments.Add(await FileAttachmentAsync(db, email, attachment, settings, store, textExtractor, ct));
 
             email.LinkCount = email.Links.Count;
             email.AttachmentCount = email.Attachments.Count;
@@ -137,8 +137,9 @@ public sealed class EmailProcessor(
         return success;
     }
 
-    private async Task<EmailAttachment> FileAttachmentAsync(
-        NomadInboxDbContext db, InboxEmail email, FetchedAttachment file, InboxSettings settings, CancellationToken ct)
+    /// <summary>Files one attachment: size and kind checks, de-duplication, storing, text extraction.</summary>
+    public static async Task<EmailAttachment> FileAttachmentAsync(
+        NomadInboxDbContext db, InboxEmail email, FetchedAttachment file, InboxSettings settings, AttachmentStore store, TextExtractor textExtractor, CancellationToken ct)
     {
         var name = AttachmentStore.SanitizeFileName(file.FileName);
         var attachment = new EmailAttachment

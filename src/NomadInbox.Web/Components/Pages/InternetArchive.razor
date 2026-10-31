@@ -1,0 +1,226 @@
+@page "/internet-archive"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using NomadInbox.Infrastructure.Archive
+@implements IDisposable
+@inject IDbContextFactory<NomadInboxDbContext> DbFactory
+@inject SettingsService SettingsService
+@inject InternetArchiveImporter Importer
+
+<PageTitle>Internet Archive · NOMAD Inbox</PageTitle>
+
+<h1 class="h3 mb-2">Internet Archive</h1>
+<p class="text-muted">
+    Import the PDFs of a collection on <a href="https://archive.org" target="_blank" rel="noopener noreferrer">archive.org</a>. Each PDF becomes an item with
+    the PDF attached: it goes to NOMAD's knowledge base@(settings?.Mode == AppMode.Collector ? " through a bundle" : ""), and can be downloaded from its item.
+</p>
+
+@if (settings is null)
+{
+    return;
+}
+
+@if (!settings.UsesInternet)
+{
+    <div class="alert alert-secondary">This NOMAD is air-gapped. Import on the collector; the PDFs arrive here in bundles.</div>
+}
+else
+{
+    <section class="card mb-4">
+        <div class="card-body">
+            <form class="d-flex flex-wrap gap-2" @onsubmit="LookUpAsync">
+                <label class="visually-hidden" for="archiveLink">Internet Archive link</label>
+                <input id="archiveLink" class="form-control flex-grow-1 w-auto" style="min-width: 16rem" placeholder="https://archive.org/details/…" @bind="link" />
+                <button type="submit" class="btn btn-primary" disabled="@looking">@(looking ? "Looking…" : "Look up")</button>
+            </form>
+            @if (error is not null)
+            {
+                <div class="alert alert-danger py-2 mt-3 mb-0">@error</div>
+            }
+        </div>
+    </section>
+
+    @if (preview is not null)
+    {
+        <section class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5">@preview.Title</h2>
+                <p class="small text-muted">
+                    @preview.Files.Count PDF(s), @Display.Size(preview.Files.Sum(f => f.Bytes)) in all.
+                    @if (preview.Files.Any(f => f.Scanned))
+                    {
+                        <text> Scans come as the searchable-text PDF the archive made of them. </text>
+                    }
+                    @if (preview.LicenseUrl is not null)
+                    {
+                        <text> Licence: </text><a href="@preview.LicenseUrl" target="_blank" rel="noopener noreferrer">@preview.LicenseUrl</a>
+                    }
+                    else
+                    {
+                        <text> The collection lists no licence, so check you may keep a copy. </text>
+                    }
+                </p>
+                <div class="row g-3 align-items-end mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="archiveCategory">Category</label>
+                        <input id="archiveCategory" class="form-control" @bind="category" />
+                    </div>
+                    <div class="col-md-6 d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => SelectAll(true)">Select all</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => SelectAll(false)">Select none</button>
+                        <button type="button" class="btn btn-primary" disabled="@(selected.Count == 0)" @onclick="QueueAsync">
+                            Import @selected.Count PDF(s) (@Display.Size(preview.Files.Where(f => selected.Contains(f.Name)).Sum(f => f.Bytes)))
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height: 24rem; overflow-y: auto">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th></th><th>File</th><th>Size</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var file in preview.Files)
+                            {
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input" aria-label="@file.Name" disabled="@(!CanImport(file))"
+                                               checked="@selected.Contains(file.Name)" @onchange="e => Toggle(file, e.Value is true)" />
+                                    </td>
+                                    <td class="text-break">@file.Name</td>
+                                    <td class="text-nowrap">@Display.Size(file.Bytes)</td>
+                                    <td class="text-nowrap small text-muted">
+                                        @if (file.State is not null) { @file.State }
+                                        else if (TooLarge(file)) { <text>Over the @settings.MaxAttachmentMegabytes MB limit</text> }
+                                        else if (file.Scanned) { <text>Scan</text> }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+@if (message is not null)
+{
+    <div class="alert alert-info py-2">@message</div>
+}
+
+@foreach (var collection in files.GroupBy(f => f.Identifier))
+{
+    var done = collection.Count(f => f.Status == ArchiveFileStatus.Done);
+    var queued = collection.Count(f => f.Status == ArchiveFileStatus.Queued);
+    var failed = collection.Where(f => f.Status == ArchiveFileStatus.Failed).ToList();
+    <section class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <h2 class="h5 mb-0">@collection.First().CollectionTitle</h2>
+                <a class="small" href="https://archive.org/details/@collection.Key" target="_blank" rel="noopener noreferrer">archive.org</a>
+                @if (failed.Count > 0 && settings.UsesInternet)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" @onclick="() => RetryAsync(collection.Key)">Try failed again</button>
+                }
+            </div>
+            <p class="small text-muted mb-@(failed.Count > 0 ? "2" : "0")">
+                @done of @collection.Count() imported@(queued > 0 ? $", {queued} waiting (one at a time)" : "")@(failed.Count > 0 ? $", {failed.Count} failed" : "").
+            </p>
+            @if (failed.Count > 0)
+            {
+                <ul class="small mb-0">
+                    @foreach (var file in failed)
+                    {
+                        <li><span class="text-break">@file.FileName</span>: @file.Error</li>
+                    }
+                </ul>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private InboxSettings? settings;
+    private string? link, category, error, message;
+    private bool looking;
+    private ArchivePreview? preview;
+    private readonly HashSet<string> selected = [];
+    private List<ArchiveFile> files = [];
+    private Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await SettingsService.GetAsync();
+        await LoadAsync();
+        timer = new Timer(_ => _ = InvokeAsync(RefreshAsync), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        files = await db.ArchiveFiles.AsNoTracking().OrderBy(f => f.Id).ToListAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (!files.Any(f => f.Status == ArchiveFileStatus.Queued)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LookUpAsync()
+    {
+        looking = true;
+        error = message = null;
+        preview = null;
+        selected.Clear();
+        try
+        {
+            preview = await Importer.PreviewAsync(link ?? "", default);
+            category = preview.Title;
+            foreach (var file in preview.Files.Where(f => f.Suggested && CanImport(f))) selected.Add(file.Name);
+        }
+        catch (ArchiveImportException ex)
+        {
+            error = ex.Message;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            error = "The Internet Archive's answer wasn't readable. Try again later.";
+        }
+        finally
+        {
+            looking = false;
+        }
+    }
+
+    private bool TooLarge(ArchivePreviewFile file) => file.Bytes > Math.Max(1, settings!.MaxAttachmentMegabytes) * 1024L * 1024L;
+
+    private bool CanImport(ArchivePreviewFile file) => file.State is null or "Failed" && !TooLarge(file);
+
+    private void Toggle(ArchivePreviewFile file, bool on)
+    {
+        if (on) selected.Add(file.Name);
+        else selected.Remove(file.Name);
+    }
+
+    private void SelectAll(bool on)
+    {
+        selected.Clear();
+        if (on) selected.UnionWith(preview!.Files.Where(CanImport).Select(f => f.Name));
+    }
+
+    private async Task QueueAsync()
+    {
+        var count = await Importer.QueueAsync(preview!, preview!.Files.Where(f => selected.Contains(f.Name)), category, default);
+        message = $"{count} PDF(s) queued. You can leave this page; they keep downloading.";
+        preview = null;
+        selected.Clear();
+        await LoadAsync();
+    }
+
+    private async Task RetryAsync(string identifier)
+    {
+        await Importer.RetryFailedAsync(identifier, default);
+        await LoadAsync();
+    }
+
+    public void Dispose() => timer?.Dispose();
+}

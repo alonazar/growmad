@@ -165,7 +165,7 @@ app.MapPost("/emails/{id:int}/reprocess", async (int id, HttpContext context, IA
 {
     await antiforgery.ValidateRequestAsync(context);
     await using var db = await dbFactory.CreateDbContextAsync();
-    var updated = await db.Emails.Where(e => e.Id == id && e.Status != EmailStatus.Processing)
+    var updated = await db.Emails.Where(e => e.Id == id && e.Source == ItemSource.Email && e.Status != EmailStatus.Processing)
         .ExecuteUpdateAsync(u => u
             .SetProperty(e => e.Status, EmailStatus.Pending)
             .SetProperty(e => e.StatusReason, (string?)null));
